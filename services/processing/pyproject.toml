@@ -1,0 +1,37 @@
+[project]
+name = "processing"
+version = "0.1.0"
+description = "Component 3: refinement and processing — live scoring, offline batch models, and the security agent's investigation package. Milestone 0 scaffold only; detection/model logic lands in epic dxnvh-0e6."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+]
+
+# torch and scikit-learn are large, GPU-adjacent downloads that a lint/typecheck/
+# import-only laptop `uv sync` never needs — see the design note on this bead
+# (dxnvh-332.7). Kept as an extra, not a base dependency, so the default
+# workspace sync stays laptop-friendly; the live/offline model code that
+# actually needs them (epic dxnvh-0e6) opts in with
+# `uv sync --package processing --extra ml`.
+[project.optional-dependencies]
+ml = [
+    "torch>=2.3",
+    "scikit-learn>=1.5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "httpx>=0.27",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Lint/type/test config lives at the workspace root (../../pyproject.toml) so
+# every member shares one set of rules — do not redeclare [tool.ruff],
+# [tool.mypy] or [tool.pytest.ini_options] here.
