@@ -20,6 +20,7 @@ default:
 setup:
     uv sync --project {{ lib }}
     @just each setup
+    @just s ingestion setup
     @just s processing setup
     pnpm --dir {{ dashboard }} install --frozen-lockfile
 
@@ -32,6 +33,7 @@ check:
     @just contracts-check
     @just fixtures-check
     @just each check
+    @just s ingestion check
     @just s processing check
     @just dashboard-check
 
@@ -40,6 +42,7 @@ check:
 test:
     uv run --project {{ lib }} pytest {{ lib }}
     @just each test
+    @just s ingestion test
     @just s processing test
     @just dashboard-test
 
