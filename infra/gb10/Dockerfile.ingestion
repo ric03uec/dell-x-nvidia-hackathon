@@ -1,0 +1,10 @@
+# Ingestion service (component 2) — /health-only scaffold. Build context is
+# the repo root (see docker-compose.app.yml) so this can COPY services/*.
+FROM python:3.11-slim
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.revision=$GIT_SHA
+
+COPY services/ingestion /app
+RUN pip install --no-cache-dir /app
+
+CMD ["python3", "-m", "uvicorn", "ingestion.app:app", "--host", "0.0.0.0", "--port", "8100"]

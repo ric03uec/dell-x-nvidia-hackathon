@@ -136,3 +136,19 @@ gb10-status:
     @ssh {{ gb10 }} 'bin/hack-vllm-large-qwen models' | jq -r '.data[].id'
     @printf 'LiteLLM :4000 serves: '
     @ssh {{ gb10 }} 'bin/hack-litellm-large-qwen models' | jq -r '.data[].id'
+
+# Build and start the app stack (ingestion, processing-live, dashboard), blocking until healthy
+[group('gb10')]
+gb10-app-up:
+    GIT_SHA=$(git rev-parse HEAD) docker compose -f infra/gb10/docker-compose.app.yml --project-directory . up -d --build --wait --wait-timeout 180
+
+# Print the deployed commit SHA and health of each application container
+[group('gb10')]
+gb10-app-status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for c in hack-ingestion hack-processing-live hack-dashboard; do
+      sha=$(docker inspect --format '{{{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$c" 2>/dev/null || echo "not running")
+      health=$(docker inspect --format '{{{{if .State.Health}}{{{{.State.Health.Status}}{{{{else}}{{{{.State.Status}}{{{{end}}' "$c" 2>/dev/null || echo "not running")
+      printf '%-20s sha=%-12s health=%s\n' "$c" "$sha" "$health"
+    done
