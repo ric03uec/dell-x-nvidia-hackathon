@@ -1,527 +1,325 @@
-# Local-Only Exfiltration Protection Platform
+# Local-Only Exfiltration Protection
 
-**Architecture document**  
-**Status:** Hackathon design / production-oriented MVP  
-**Target platform:** Dell system with NVIDIA GB10  
-**Deployment model:** Fully on-premises; no customer telemetry or content leaves the organization
+**Hackathon architecture with a path to production**
 
-## 1. Purpose
+**Target:** Dell system with NVIDIA GB10
 
-Build an installable, local-only platform that detects potential data exfiltration from CVE vulnerability intelligence, internal security telemetry, and live activity. It continuously updates behavioral baselines, scores live events, and performs a gated nightly learning cycle.
+**Core rule:** Customer events, models, and analysis stay on the appliance.
 
-The platform should:
+## 1. What we are building
 
-- Import CVE records and security advisories from approved vulnerability-intelligence sources.
-- Import historical internal security reports delivered as CSV, JSON, or log files when available.
-- Receive live events from endpoints, proxies, firewalls, and network sensors.
-- Periodically discover assets on administrator-authorized internal networks.
-- Detect known policy violations and anomalous behavior.
-- Explain and correlate incidents with a local LLM.
-- Learn from recent activity and analyst feedback without sending data to the cloud.
-- Start in observe mode and support warn/block modes after validation.
+A local appliance that collects security activity, detects unusual outbound behavior live, and uses a more powerful GPU model overnight to find deeper patterns and improve the live detector.
 
-> **Terminology:** The correct term is **CVE (Common Vulnerabilities and Exposures) records and related online security advisories**. Typical sources include MITRE CVE, NIST NVD, CISA Known Exploited Vulnerabilities (KEV), and vendor advisories. These feeds describe known vulnerabilities; they are different from internal security-event reports and CSV files.
+The term previously written as “CVS reports” means **CVE (Common Vulnerabilities and Exposures) records and online security advisories**, such as MITRE CVE, NIST NVD, CISA KEV, and vendor advisories. CVEs provide risk context; they do not directly prove exfiltration.
 
-## 2. Architecture principles
+## 2. Hackathon MVP
 
-1. **Local by design:** collection, storage, inference, training, LLM processing, and administration remain on-premises.
-2. **Metadata first:** collect file content only when explicitly configured and permitted. Prefer hashes, labels, headers, paths, and transfer metadata.
-3. **Fast deterministic path:** rules and lightweight anomaly models handle live scoring. The LLM is not in the mandatory blocking path.
-4. **Human-gated learning:** live baselines may update incrementally, but candidate model promotion requires evaluation and approval.
-5. **Explainable decisions:** every alert includes the rules, features, and behavioral deviations that raised its score.
-6. **Fail safely:** loss of the ML or LLM service must not interrupt ordinary business traffic unless an administrator explicitly chooses fail-closed enforcement.
-7. **Authorized collection:** network scanning and monitoring are limited to administrator-approved assets and subnets.
+Build one Docker Compose application on the GB10. Do not build production endpoint agents or a distributed platform during the hackathon.
 
-## 3. System context
+### MVP architecture
 
 ```mermaid
 flowchart LR
-    subgraph Sources[Business and Intelligence Sources]
-        EP[Managed Endpoints]
-        SEC[Firewall / EDR / DLP / VPN / SIEM]
-        FS[File and Email Systems]
-        SW[Network Switch / Router]
-        CVE[CVE / NVD / CISA KEV / Vendor Advisories]
-        ADMIN[Security Analyst]
+    subgraph Sources[Sources]
+        LIVE[Live Demo Events]
+        REPORTS[Firewall / Proxy Report]
+        CVE[CVE + CISA KEV Snapshot]
+        SCAN[Authorized Nmap Scan]
     end
 
-    subgraph Appliance[Local GB10 Security Appliance]
-        subgraph Online[Online / Live Path - Event Time]
-            INGEST[Ingest and Normalize]
-            ENRICH[Enrich and Extract Features]
-            RULES[Rules and Rolling Baselines]
-            MODEL[Active Anomaly Model]
-            RISK[Risk and Policy Decision]
-            ACTION[Observe / Warn / Block]
-        end
-
-        subgraph LocalData[Local Data Plane]
-            EVENTS[(Encrypted Event and Feature Store)]
-            VULNS[(Local CVE / KEV Database)]
-            REGISTRY[(Versioned Model Registry)]
-        end
-
-        subgraph Offline[Offline / Nightly Path - Batch Time]
-            DATASET[Build Approved Dataset]
-            TRAIN[Train Candidate Model]
-            EVAL[Evaluate and Calibrate]
-            APPROVE{Analyst Approval}
-        end
-
-        LLM[Local LLM - Asynchronous Explanation]
-        UI[Local Dashboard and Policy]
-        UPDATE[CVE Feed Updater / Offline Import]
+    subgraph Process[Local Processing]
+        API[FastAPI Ingestion]
+        NORMALIZE[Normalize + Enrich]
+        DB[(PostgreSQL)]
     end
 
-    EP -->|Live events| INGEST
-    SEC -->|Live stream or reports| INGEST
-    FS -->|Audit events| INGEST
-    SW -->|NetFlow or mirrored metadata| INGEST
-    CVE -->|Allowlisted sync or signed bundle| UPDATE --> VULNS
-
-    INGEST --> ENRICH
-    VULNS --> ENRICH
-    ENRICH --> RULES
-    ENRICH --> MODEL
-    RULES --> RISK
-    MODEL --> RISK
-    RISK --> ACTION
-    RISK --> EVENTS
-    RISK --> UI
-    RISK -.->|Structured incident| LLM --> UI
-
-    EVENTS -->|Nightly snapshot| DATASET
-    UI -->|Labels and exclusions| DATASET
-    DATASET --> TRAIN --> EVAL --> APPROVE
-    APPROVE -->|Accepted candidate| REGISTRY
-    REGISTRY -->|Atomic promotion / rollback| MODEL
-    APPROVE -->|Rejected candidate| EVENTS
-    ADMIN <--> UI
-```
-
-Here, **online** means the always-running, event-time detection path; it does not mean cloud processing. It continuously scores live events and updates safe rolling statistics. **Offline** means the local batch-learning path, normally run nightly. It trains and evaluates an immutable candidate from a snapshot, then promotes it into the live path only after approval. Both paths execute on the GB10 appliance. CVE intelligence is refreshed separately through either an allowlisted outbound-only updater or a signed offline bundle.
-
-## 4. Data sources
-
-### 4.1 CVE and vulnerability intelligence
-
-The platform maintains a local vulnerability-intelligence database from approved sources:
-
-| Source | Typical data | Ingestion method |
-|---|---|---|
-| MITRE CVE | CVE identifiers and descriptions | Controlled feed sync or offline bundle |
-| NIST NVD | CVSS scores, affected products, and references | API/feed sync or offline bundle |
-| CISA KEV | Vulnerabilities known to be exploited | Catalog sync or offline bundle |
-| Vendor advisories | Product-specific fixes and mitigations | Approved connector or manual import |
-
-The enrichment service maps discovered software, services, and asset inventory to applicable CVEs. CVE data does not directly prove exfiltration; it raises context and priority—for example, a device with a known exploited vulnerability making an unusual outbound transfer.
-
-For a connected on-premises installation, a restricted updater may make outbound-only requests to an allowlist of approved feed hosts. It sends no customer events, asset details, or model data. For a strictly air-gapped installation, an administrator imports a signed vulnerability-feed bundle from removable media or an internal update mirror.
-
-### 4.2 Historical and scheduled internal security reports
-
-When available, the customer exports or schedules reports from existing internal systems:
-
-| Source | Typical data | Ingestion method |
-|---|---|---|
-| Firewall | Connections, bytes, ports, allow/deny | CSV/JSON, Syslog, local API |
-| Squid or web proxy | User, destination, method, result | Log tail, Syslog, scheduled report |
-| EDR/antivirus | Process, user, device, file activity | CSV/JSON, local API |
-| DLP product | Policy matches and incident labels | CSV/JSON |
-| VPN | User, device, source, session activity | CSV/Syslog |
-| SIEM | Correlated historical events | Scheduled CSV/JSON export |
-| File server/NAS | File access, copy, and permission events | Audit report or agent |
-| Email gateway | Attachments, recipients, policy results | Report or Syslog |
-| Asset/identity systems | Device owner, department, role | CSV or local directory connector |
-
-Supported report delivery for the MVP:
-
-- Manual upload through the dashboard.
-- Watched local directory, for example `/var/lib/exfil-guard/import/`.
-- Read-only internal network share.
-- Scheduled internal API pull.
-
-### 4.3 Live data
-
-- **Endpoint agent:** user, device, process, file metadata, destination, and transfer action.
-- **Squid:** web destination and proxy activity. Squid is optional and does not cover all exfiltration channels.
-- **Zeek/Suricata or NetFlow/IPFIX:** DNS and connection metadata, including unmanaged devices.
-- **Firewall/Syslog:** live network decisions and flow summaries.
-- **File-system auditing:** access to sensitive files when supported by the operating system.
-
-HTTPS payloads remain encrypted unless the organization separately authorizes TLS inspection. TLS interception is not required for the MVP.
-
-### 4.4 Periodic network discovery
-
-A scheduler runs throttled discovery only against configured subnets. Discovery produces asset events such as new hosts, changed services, and unexpected externally reachable services. It is supporting context rather than direct proof of exfiltration.
-
-## 5. Logical architecture
-
-```mermaid
-flowchart TB
-    subgraph Sources
-        CVEFEEDS[CVE / NVD / CISA KEV\nControlled Sync or Offline Bundle]
-        REPORTS[Internal Security Reports\nCSV / JSON / Logs]
-        AGENTS[Endpoint Agents]
-        PROXY[Squid / Firewall / Syslog]
-        SENSOR[Zeek / NetFlow]
-        SCANNER[Authorized Network Scanner]
+    subgraph Online[Online / Live - Seconds]
+        FEATURES[Simple Features]
+        RULES[Rules + Baselines]
+        SMALL[Small Live Model]
+        SCORE[Risk Score]
     end
 
-    subgraph Collection[Collection and Processing]
-        CONNECTORS[Source Connectors]
-        QUEUE[Local Durable Event Queue]
-        VALIDATE[Validate, Deduplicate, Normalize]
-        ENRICH[Identity, Asset and Destination Enrichment]
-        FEATURES[Streaming Feature Extraction]
+    subgraph Offline[Offline / Nightly - GPU]
+        SNAPSHOT[Training Snapshot]
+        LARGE[Powerful Offline Model]
+        EVAL[Evaluate + Calibrate]
+        PROMOTE{Approve Update}
     end
 
-    subgraph Live[Live Detection Path]
-        RULES[Rules and DLP Policies]
-        BASELINE[Rolling Behavioral Baselines]
-        MODEL[Live Anomaly Model]
-        RISK[Risk and Policy Engine]
-        RESPONSE[Observe / Warn / Block]
-    end
+    UI[Local Dashboard]
+    LLM[Local LLM Explanation]
 
-    subgraph Intelligence[Local Intelligence]
-        LLM[Local LLM\nExplain, Summarize, Classify]
-        UI[Dashboard and Analyst Workflow]
-    end
+    LIVE --> API
+    REPORTS --> API
+    CVE --> API
+    SCAN --> API
+    API --> NORMALIZE --> DB
 
-    subgraph Data[Local Data Plane]
-        EVENTDB[(Event Store)]
-        FEATUREDB[(Feature and Baseline Store)]
-        AUDIT[(Tamper-Evident Audit Log)]
-        REGISTRY[(Model Registry)]
-    end
-
-    subgraph Learning[Nightly Learning Loop]
-        DATASET[Build Approved Dataset]
-        TRAIN[Train Candidate Models]
-        EVAL[Evaluate and Calibrate]
-        APPROVE{Approval Gate}
-    end
-
-    CVEFEEDS --> CONNECTORS
-    REPORTS --> CONNECTORS
-    AGENTS --> CONNECTORS
-    PROXY --> CONNECTORS
-    SENSOR --> CONNECTORS
-    SCANNER --> CONNECTORS
-    CONNECTORS --> QUEUE --> VALIDATE --> ENRICH --> FEATURES
-
+    NORMALIZE --> FEATURES
     FEATURES --> RULES
-    FEATURES --> BASELINE
-    FEATURES --> MODEL
-    RULES --> RISK
-    BASELINE --> RISK
-    MODEL --> RISK
-    RISK --> RESPONSE
-    RISK --> EVENTDB
-    RISK --> AUDIT
-    RISK --> LLM --> UI
-    RISK --> UI
+    FEATURES --> SMALL
+    RULES --> SCORE
+    SMALL --> SCORE
+    SCORE --> DB
+    SCORE --> UI
+    SCORE -.-> LLM --> UI
 
-    FEATURES --> FEATUREDB
-    VALIDATE --> EVENTDB
-    UI -->|Analyst labels| EVENTDB
-
-    EVENTDB --> DATASET
-    FEATUREDB --> DATASET
-    DATASET --> TRAIN --> EVAL --> APPROVE
-    APPROVE -->|Accepted| REGISTRY
-    REGISTRY -->|Atomic versioned deployment| MODEL
-    APPROVE -->|Rejected| AUDIT
+    DB -->|Nightly| SNAPSHOT --> LARGE --> EVAL --> PROMOTE
+    PROMOTE -->|New thresholds / small model| SMALL
+    PROMOTE -->|Deeper findings| UI
+    UI -->|Analyst labels| DB
 ```
 
-## 6. End-to-end flows
+**Online** means the fast event-time path running locally. **Offline** means local batch processing, normally run nightly. It does not mean cloud processing.
 
-### 6.1 Live event flow
+### What to demo
 
-1. A connector receives an endpoint, proxy, firewall, or network event.
-2. The event is authenticated, validated, deduplicated, and normalized.
-3. The enrichment service adds known user, device, department, destination, sensitivity, and applicable CVE/KEV context.
-4. Streaming features compare the event with user, device, department, and organizational behavior.
-5. Rules, rolling baselines, and the live anomaly model independently produce evidence.
-6. The risk engine combines evidence into a calibrated score and policy decision.
-7. The event and decision are persisted locally.
-8. The dashboard receives an alert. The local LLM may generate a summary and recommended investigation steps.
-9. If configured, a deterministic enforcement adapter warns the user, denies a proxy request, or requests endpoint isolation.
+1. Load a local CVE/NVD and CISA KEV snapshot.
+2. Import one sample firewall or Squid report.
+3. Run an authorized Nmap scan against a small test subnet.
+4. Generate live events representing normal transfers.
+5. Generate one suspicious event: a large, off-hours upload to a new destination from a vulnerable asset.
+6. Score it immediately with rules, baselines, and the small live model.
+7. Show the alert and local-LLM explanation in the dashboard.
+8. Let an analyst label it normal or malicious.
+9. Trigger the “nightly” GPU job manually for the demo.
+10. Show the powerful offline model finding the anomaly and proposing an updated live model or threshold.
+11. Approve the update and show model version/rollback.
 
-Target latency for ordinary event scoring is less than one second. LLM output may arrive asynchronously and must not delay the initial alert.
+## 3. Keep the MVP small
 
-### 6.2 Live learning
+### Five application components
 
-“Live learning” is intentionally constrained:
+| Component | Hackathon choice | Responsibility |
+|---|---|---|
+| API | FastAPI | Receive files and live events |
+| Database | PostgreSQL | Events, assets, CVEs, labels, and model metadata |
+| Worker | Python | Normalize, scan, score, and run scheduled jobs |
+| Dashboard | Streamlit | Alerts, explanations, labels, and model approval |
+| Model server | PyTorch plus Ollama/llama.cpp | Offline GPU model and local LLM |
 
-- Rolling counters, medians, median absolute deviation, destination familiarity, and time-window features update continuously.
-- Confirmed incidents and unresolved high-risk events are excluded from normal baseline updates.
-- Analyst labels are stored immediately but do not rewrite the production model.
-- The deployed model artifact remains immutable until a candidate passes the nightly gate.
+PostgreSQL can act as the job queue for the MVP. Do not add Kafka, a feature store, Kubernetes, or multiple databases yet.
 
-This prevents an attacker from making malicious behavior appear normal through repetition.
+### MVP data sources
 
-### 6.3 Nightly learning loop
+Use only four sources:
 
-1. Snapshot an approved time range from the event and feature stores.
-2. Exclude confirmed incidents, unresolved high-risk events, corrupted records, and untrusted devices.
-3. Apply analyst labels and approved exceptions.
-4. Train baseline and anomaly-model candidates.
-5. Evaluate candidates against labeled incidents, replay data, and synthetic exfiltration scenarios.
-6. Calibrate thresholds against an alert budget, such as alerts per analyst per day.
-7. Compare the candidate with the active model.
-8. Register the candidate with its metrics, dataset version, configuration, and checksum.
-9. Require analyst approval for promotion during the MVP.
-10. Atomically activate the approved model; retain immediate rollback to the previous version.
+- **Live event generator:** simulates endpoint or network-transfer events.
+- **One internal report:** a sample Squid, firewall, DLP, or SIEM CSV/JSON export.
+- **CVE snapshot:** a downloaded NVD/CVE sample plus CISA KEV catalog, stored locally.
+- **Nmap:** scans only an explicitly configured test subnet.
 
-## 7. Canonical event model
+If time permits, tail a real Squid log. A production endpoint agent can come later.
+
+### Minimal event format
 
 ```json
 {
-  "event_id": "01J...",
   "timestamp": "2026-03-15T22:15:00Z",
-  "source_type": "endpoint",
-  "source_product": "exfil-guard-agent",
-  "user_id": "alice",
-  "device_id": "LAPTOP-17",
-  "department": "finance",
-  "process": "chrome.exe",
-  "action": "upload",
+  "user": "alice",
+  "device": "laptop-17",
+  "process": "browser",
   "destination": "unknown-storage.example",
-  "destination_ip": "203.0.113.10",
-  "protocol": "HTTPS",
   "bytes_sent": 25000000,
-  "file_name": "payroll.csv",
-  "file_type": "csv",
-  "file_hash": "sha256:...",
-  "sensitivity": "confidential",
-  "labels": [],
-  "raw_reference": "local://events/2026/03/15/..."
+  "file_sensitivity": "confidential",
+  "outside_work_hours": true,
+  "asset_has_kev": true
 }
 ```
 
-Raw source records should be retained only according to customer policy. Sensitive fields should be tokenized or omitted when they are unnecessary for detection.
+## 4. Models
 
-## 8. Detection architecture
+### Small live model
 
-### 8.1 Rules and DLP policies
+The live path must respond quickly and remain explainable. Use:
 
-Rules handle known, explainable conditions:
+1. Deterministic rules.
+2. Per-user/device rolling baselines.
+3. A small Isolation Forest model.
 
-- Confidential data sent to an unapproved destination.
-- Blocked protocol or external storage provider.
-- Secret pattern found by an explicitly enabled content scanner.
-- Transfer by an unauthorized process or account.
-- Large transfer outside approved hours.
-
-### 8.2 Behavioral baselines
-
-Maintain robust baselines per user, device, department, process, destination, and organization. Useful features include:
+Initial features:
 
 - `log(bytes_sent + 1)`
-- Bytes relative to the user's and department's median
-- New destination for the user or organization
-- Upload count and unique destinations over 10-minute, 1-hour, 24-hour, and 7-day windows
-- Activity outside the entity's normal hours
-- File sensitivity
-- Process-to-destination rarity
-- Upload/download ratio
-- Device or identity risk status
+- New destination for user
+- New destination for organization
+- Transfer size relative to user baseline
+- Outside normal working hours
+- Sensitive file indicator
+- Number of uploads in the last hour
+- Asset has a matching CVE or CISA KEV entry
 
-Use median and median absolute deviation where possible to reduce sensitivity to outliers.
-
-### 8.3 Live anomaly model
-
-The MVP uses an Isolation Forest or similarly lightweight unsupervised model. It is fast, works with mostly normal historical data, and runs efficiently on CPU. Rules and baseline scores are combined with the model score rather than replaced by it.
-
-Example policy bands:
-
-| Score | Default action |
-|---:|---|
-| 0–39 | Store only |
-| 40–69 | Low-priority alert |
-| 70–84 | Warn and request review |
-| 85–100 | Block only when an approved deterministic policy also matches |
-
-Thresholds must be calibrated for each organization.
-
-### 8.4 Offline model
-
-After the MVP, the GB10 GPU can train an autoencoder or sequence model over windows of user activity. Reconstruction or sequence prediction error becomes an additional signal. The existing rule and baseline paths remain available for explanation and fallback.
-
-### 8.5 Evaluation
-
-Track:
-
-- Precision among the highest-risk alerts
-- Recall against confirmed and synthetic incidents
-- False positives per user and per analyst per day
-- Detection and processing latency
-- Performance across departments and device types
-- Drift in feature distributions
-- Candidate-versus-active model regressions
-
-Synthetic tests should include large uploads, repeated small uploads, unusual destinations, off-hours transfers, unusual processes, and gradual low-and-slow transfer patterns.
-
-## 9. Local LLM role
-
-The local LLM is an analyst-assistance component. It can:
-
-- Turn structured evidence into a concise incident explanation.
-- Summarize related events and analyst notes.
-- Classify approved metadata or limited content samples by sensitivity.
-- Suggest mappings for unfamiliar CSV report columns.
-- Translate analyst questions into constrained, read-only internal queries.
-- Draft detection rules or response recommendations for human approval.
-
-The LLM must not:
-
-- Inspect every packet.
-- directly execute arbitrary commands or blocking actions.
-- replace deterministic policy checks.
-- treat log text, filenames, report fields, or file contents as trusted instructions.
-
-LLM calls use minimized, structured context. Outputs conform to a validated schema and are logged. The model server listens only on an internal container network and has no outbound network access.
-
-## 10. Deployment on the Dell GB10
-
-### 10.1 Appliance services
+Example decision:
 
 ```text
-Docker Compose / local container runtime
-├── reverse-proxy
-├── dashboard
-├── ingestion-api
-├── connector-workers
-├── event-queue
-├── normalization-worker
-├── feature-worker
-├── live-detection-service
-├── policy-service
-├── nightly-training-service
-├── local-llm-service
-├── postgres
-├── model-registry
-└── optional: squid, zeek, scanner
+Risk: 91/100
+- New destination: +20
+- 8x normal transfer size: +25
+- Confidential file: +20
+- Outside working hours: +10
+- Known-exploited vulnerability on device: +10
+- Isolation Forest anomaly: +6
 ```
 
-Suggested MVP technologies:
+For the MVP, only alert. Do not automatically block based solely on an unsupervised score.
 
-| Capability | Technology |
-|---|---|
-| API | Python and FastAPI |
-| Durable stream | Redis Streams; use a disk-backed broker later if required |
-| Event/configuration database | PostgreSQL |
-| Feature processing | Polars/Pandas for MVP |
-| Live anomaly model | scikit-learn Isolation Forest |
-| GPU offline model | PyTorch |
-| LLM runtime | llama.cpp, Ollama, or vLLM with a locally stored model |
-| Dashboard | React or server-rendered FastAPI UI |
-| Network metadata | Zeek or NetFlow collector |
-| Web proxy integration | Existing or bundled Squid |
-| Discovery | Throttled scanner against approved subnets |
+### Powerful offline model
 
-If the GB10 host uses an ARM64 Grace CPU, every image and native dependency must support `linux/arm64`. CUDA, the NVIDIA container runtime, and GPU visibility should be verified during installation. Allocate CPU to live detection and storage; reserve GPU capacity for the local LLM and offline neural training.
+The GB10 runs a more powerful model over historical sequences during the nightly job. For the hackathon, use a **PyTorch autoencoder** over time-window features. If the team has time, replace or extend it with a temporal transformer after the MVP.
 
-### 10.2 Network placement
+The offline model can use features that are too expensive for every live request:
 
-- Connect the appliance management interface to an administrator-only network.
-- Expose the ingestion endpoint only to approved internal networks.
-- Optionally connect a monitoring interface to a switch SPAN/TAP.
-- Receive NetFlow/IPFIX or Syslog from existing network equipment.
-- Configure Squid as an explicit proxy only where desired; managed endpoints can receive proxy settings through GPO, MDM, or a PAC file.
-- Deny appliance outbound internet access after installation and model provisioning, except for an optional allowlisted CVE/advisory update service. The updater sends no customer telemetry; air-gapped deployments use signed offline bundles.
+- Sequences of the user’s last 20–100 events
+- Activity over 1-hour, 24-hour, and 7-day windows
+- Relationships among users, devices, processes, and destinations
+- Slow, repeated transfers that individually look normal
+- CVE/KEV context for the source asset
+- Analyst-confirmed normal and malicious activity
 
-### 10.3 Enforcement modes
+It produces:
 
-1. **Observe:** score, store, and alert only.
-2. **Warn:** notify the user or analyst and request confirmation.
-3. **Enforce:** block only approved high-confidence policy conditions.
+- A deeper anomaly score for historical events
+- Groups of related suspicious events
+- Recommended live thresholds
+- A candidate small model or teacher-generated labels
+- New incidents for analyst review
 
-New installations default to observe mode.
+The powerful model remains available for on-demand investigations as well as the nightly run. It does not need to sit in the sub-second live path.
 
-## 11. Security and operations
+### Learning loop
 
-- Use mutual TLS or per-agent certificates for endpoint ingestion.
-- Encrypt disks and database backups; keep keys in an OS keystore or available hardware-backed store.
-- Implement role-based access for administrators and analysts.
-- Sign agents, model artifacts, rules, and update bundles.
-- Record configuration, model promotion, enforcement, and analyst actions in an append-only audit trail.
-- Define retention separately for raw records, normalized events, features, and incidents.
-- Back up configuration, policies, model registry metadata, and analyst labels locally.
-- Support model and policy rollback.
-- Pin dependencies and scan the offline installation bundle before deployment.
-- Require explicit configuration of scanned networks and content-inspection policies.
+```mermaid
+flowchart LR
+    EVENTS[New Events] --> LIVE[Live Scoring]
+    LIVE --> LABELS[Analyst Labels]
+    LIVE --> STORE[(Local History)]
+    LABELS --> STORE
+    STORE -->|Nightly snapshot| POWERFUL[Powerful GPU Model]
+    POWERFUL --> TEST[Replay + Evaluate]
+    TEST --> GATE{Better and Safe?}
+    GATE -->|Yes, approve| VERSION[Versioned Candidate]
+    VERSION --> DEPLOY[Update Live Model / Thresholds]
+    GATE -->|No| KEEP[Keep Current Model]
+```
 
-## 12. Failure behavior
+Do not train directly on unresolved high-risk events. Otherwise, repeated malicious activity can become part of the “normal” baseline. Every promoted model is versioned and can be rolled back.
 
-| Failure | Default behavior |
-|---|---|
-| LLM unavailable | Detection continues; explanations are deferred |
-| Nightly training fails | Keep active model; alert administrator |
-| Live model unavailable | Continue rules and robust baselines |
-| Queue/database temporarily unavailable | Buffer locally with bounded storage and backpressure |
-| Endpoint agent disconnected | Report stale agent; use available network metadata |
-| Proxy integration unavailable | Do not interrupt traffic unless fail-closed was explicitly selected |
-| Candidate model regresses | Reject candidate and retain active version |
+### Local LLM
 
-## 13. Hackathon MVP scope
+The local LLM is not the anomaly detector. It receives structured evidence and:
 
-Demonstrate one complete scenario:
+- Explains why an event was flagged.
+- Summarizes related events.
+- Suggests investigation steps.
+- Helps map unfamiliar report columns.
 
-1. Import a local snapshot of CVE/NVD and CISA KEV vulnerability intelligence.
-2. Match discovered test assets to applicable CVEs and add that context to events.
-3. Import historical firewall, proxy, or DLP reports in CSV format when sample reports are available.
-4. Receive simulated or real endpoint transfer metadata live.
-5. Ingest Squid, firewall, or Zeek connection events.
-6. Run discovery against a small authorized test subnet.
-7. Build rolling user and destination baselines.
-8. Score events with rules and Isolation Forest.
-9. Detect a confidential, unusually large upload from a vulnerable asset to a new destination.
-10. Display anomaly evidence, relevant CVE/KEV context, and a local-LLM explanation.
-11. Allow the analyst to mark the event normal or malicious.
-12. Run the nightly candidate-training loop and show model comparison, approval, promotion, and rollback.
-13. Disconnect internet access and show that ingestion, inference, learning, and the dashboard continue to operate using the local vulnerability snapshot.
+It recommends actions but does not execute blocking commands. Logs, filenames, CVE text, and report content are untrusted input and cannot be treated as instructions.
 
-## 14. Four-person implementation split
+## 5. Installation on the GB10
 
-### Member 1 — Ingestion and schema
+For the hackathon:
 
-- Canonical event schema
-- CVE/NVD/KEV feed importer and local vulnerability database
-- CSV/JSON internal-report importer and watched directory
-- Live ingestion API and queue
-- Validation, normalization, and synthetic data generator
+1. Install Docker, Docker Compose, the NVIDIA driver, and NVIDIA Container Toolkit.
+2. Verify GPU access with `nvidia-smi`.
+3. Verify whether the host is ARM64 with `uname -m`; use `linux/arm64` images if required.
+4. Download model files once, then run all model inference locally.
+5. Start the API, PostgreSQL, worker, dashboard, and model server with Docker Compose.
+6. Import the CVE/KEV snapshot and sample security report.
+7. Configure one authorized scan range.
+8. Open only the dashboard and ingestion ports on the internal network.
 
-### Member 2 — Sensors and asset discovery
+The CVE snapshot can be refreshed through an allowlisted outbound-only updater that sends no customer data. A fully air-gapped business can import a signed update bundle instead.
 
-- Squid/Syslog/Zeek or NetFlow connector
-- Endpoint-agent prototype
-- Authorized network discovery scheduler
-- Asset and destination enrichment
+Suggested resource use:
 
-### Member 3 — Detection and learning
+- CPU: API, PostgreSQL, rules, and small live model
+- GPU: powerful offline model and local LLM
+- Disk: events, CVE database, model versions, and audit history
 
-- Streaming features and rolling baselines
-- Rules and risk engine
-- Isolation Forest live model
-- Nightly training, evaluation, model registry, and rollback
+## 6. Four-person split
 
-### Member 4 — LLM, dashboard, and deployment
+### Member 1 — Sources and ingestion
 
-- Local LLM service and structured prompts
-- Incident dashboard and analyst feedback
-- Observe/warn/enforce workflow
-- GB10 Docker Compose bundle, authentication, and audit UI
+- FastAPI ingestion
+- Sample report importer
+- CVE/KEV snapshot loader
+- Live event generator
 
-## 15. Decisions to confirm
+### Member 2 — Processing and live detection
 
-- Exact Dell GB10 model, operating system, CPU architecture, RAM, and available GPU runtime.
-- Which CVE/advisory sources are required: MITRE CVE, NVD, CISA KEV, and/or vendor advisories.
-- Whether feed updates use controlled internet access, an internal mirror, or signed offline bundles.
-- Which internal report products and sample CSV schemas are available for the demo.
-- Whether the demo uses Squid, Zeek, NetFlow, or simulated network events.
-- Endpoint operating systems and what metadata the prototype may collect.
-- Whether active blocking is in hackathon scope or demonstrated as a simulated action.
-- Retention, privacy, and content-inspection requirements.
+- Normalization and feature extraction
+- Rolling baselines and rules
+- Isolation Forest scoring
+- Risk-score explanations
+
+### Member 3 — Powerful offline model
+
+- PyTorch autoencoder and nightly job
+- Training dataset and exclusions
+- Evaluation, candidate versions, and rollback
+- Optional teacher-to-small-model update
+
+### Member 4 — Dashboard and deployment
+
+- Streamlit dashboard
+- Local LLM explanations
+- Analyst labels and model approval
+- Docker Compose and GB10 setup
+
+## 7. Eventual production architecture
+
+After the hackathon, the same data flow can be expanded without changing the core design.
+
+```mermaid
+flowchart LR
+    subgraph EnterpriseSources[Enterprise Sources]
+        AGENTS[Signed Endpoint Agents]
+        LOGS[Firewall / Proxy / EDR / SIEM]
+        NET[Zeek / NetFlow / DNS]
+        INTEL[CVE / KEV / Vendor Intelligence]
+        ASSETS[Asset + Identity Systems]
+    end
+
+    subgraph Collection[Collection]
+        CONNECT[Versioned Connectors]
+        QUEUE[Durable Event Queue]
+        PIPE[Validation + Enrichment]
+    end
+
+    subgraph LiveProduction[Highly Available Live Path]
+        FEATURE[Streaming Feature Store]
+        POLICY[Rules + DLP]
+        LIVEPROD[Small Model Serving]
+        ENFORCE[Alert / Warn / Block / Isolate]
+    end
+
+    subgraph OfflineProduction[GB10 Offline Intelligence]
+        LAKE[(Encrypted History)]
+        BIG[Powerful Temporal / Graph Model]
+        LOCAL_LLM[Local LLM + Investigation]
+        REGISTRY[Signed Model Registry]
+    end
+
+    AGENTS --> CONNECT
+    LOGS --> CONNECT
+    NET --> CONNECT
+    INTEL --> CONNECT
+    ASSETS --> CONNECT
+    CONNECT --> QUEUE --> PIPE --> FEATURE
+    FEATURE --> POLICY
+    FEATURE --> LIVEPROD
+    POLICY --> ENFORCE
+    LIVEPROD --> ENFORCE
+    PIPE --> LAKE
+    LAKE --> BIG
+    BIG --> LOCAL_LLM
+    BIG --> REGISTRY --> LIVEPROD
+```
+
+Production additions include signed endpoint agents, high availability, RBAC, encrypted backups, retention controls, tamper-evident audit logs, signed model artifacts, staged enforcement, and integrations with firewalls or EDR systems.
+
+## 8. Definition of hackathon success
+
+The MVP succeeds if it can demonstrate this story locally on the GB10:
+
+> A live transfer arrives, receives an immediate explainable risk score, and appears in the dashboard. That night, the powerful GPU model analyzes the broader sequence, finds deeper evidence, and proposes an improvement. An analyst reviews and promotes the improvement without any customer data leaving the appliance.
