@@ -36,7 +36,7 @@ The platform should:
 
 ```mermaid
 flowchart LR
-    subgraph Business[Business Environment]
+    subgraph Sources[Business and Intelligence Sources]
         EP[Managed Endpoints]
         SEC[Firewall / EDR / DLP / VPN / SIEM]
         FS[File and Email Systems]
@@ -46,29 +46,60 @@ flowchart LR
     end
 
     subgraph Appliance[Local GB10 Security Appliance]
-        INGEST[Ingestion and Normalization]
-        DETECT[Live Detection]
-        STORE[(Encrypted Local Storage)]
-        LEARN[Nightly Learning]
-        LLM[Local LLM]
-        UI[Dashboard and Policy]
+        subgraph Online[Online / Live Path - Event Time]
+            INGEST[Ingest and Normalize]
+            ENRICH[Enrich and Extract Features]
+            RULES[Rules and Rolling Baselines]
+            MODEL[Active Anomaly Model]
+            RISK[Risk and Policy Decision]
+            ACTION[Observe / Warn / Block]
+        end
+
+        subgraph LocalData[Local Data Plane]
+            EVENTS[(Encrypted Event and Feature Store)]
+            VULNS[(Local CVE / KEV Database)]
+            REGISTRY[(Versioned Model Registry)]
+        end
+
+        subgraph Offline[Offline / Nightly Path - Batch Time]
+            DATASET[Build Approved Dataset]
+            TRAIN[Train Candidate Model]
+            EVAL[Evaluate and Calibrate]
+            APPROVE{Analyst Approval}
+        end
+
+        LLM[Local LLM - Asynchronous Explanation]
+        UI[Local Dashboard and Policy]
+        UPDATE[CVE Feed Updater / Offline Import]
     end
 
-    EP -->|Endpoint events| INGEST
-    SEC -->|CSV, JSON, Syslog, API| INGEST
-    FS -->|Audit reports| INGEST
-    SW -->|NetFlow or mirrored traffic metadata| INGEST
-    CVE -->|Controlled sync or offline bundle| INGEST
-    INGEST --> DETECT
-    DETECT --> STORE
-    STORE --> LEARN
-    LEARN --> DETECT
-    DETECT --> LLM
-    LLM --> UI
-    DETECT --> UI
+    EP -->|Live events| INGEST
+    SEC -->|Live stream or reports| INGEST
+    FS -->|Audit events| INGEST
+    SW -->|NetFlow or mirrored metadata| INGEST
+    CVE -->|Allowlisted sync or signed bundle| UPDATE --> VULNS
+
+    INGEST --> ENRICH
+    VULNS --> ENRICH
+    ENRICH --> RULES
+    ENRICH --> MODEL
+    RULES --> RISK
+    MODEL --> RISK
+    RISK --> ACTION
+    RISK --> EVENTS
+    RISK --> UI
+    RISK -.->|Structured incident| LLM --> UI
+
+    EVENTS -->|Nightly snapshot| DATASET
+    UI -->|Labels and exclusions| DATASET
+    DATASET --> TRAIN --> EVAL --> APPROVE
+    APPROVE -->|Accepted candidate| REGISTRY
+    REGISTRY -->|Atomic promotion / rollback| MODEL
+    APPROVE -->|Rejected candidate| EVENTS
     ADMIN <--> UI
-    UI -->|Labels and approvals| LEARN
 ```
+
+Here, **online** means the always-running, event-time detection path; it does not mean cloud processing. It continuously scores live events and updates safe rolling statistics. **Offline** means the local batch-learning path, normally run nightly. It trains and evaluates an immutable candidate from a snapshot, then promotes it into the live path only after approval. Both paths execute on the GB10 appliance. CVE intelligence is refreshed separately through either an allowlisted outbound-only updater or a signed offline bundle.
 
 ## 4. Data sources
 
