@@ -20,6 +20,8 @@
 
     - name: Ensure the existing inference stack is ready
       ansible.builtin.include_tasks: tasks/inference.yml
+      vars:
+        inference_repair: false
 
     - name: Create OpenClaw installation directories
       ansible.builtin.file:

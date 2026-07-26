@@ -15,7 +15,9 @@
       - "{{ vllm_wrapper }}"
       - start
       - qwen36
-  when: vllm_probe.status | default(0) != 200
+  when:
+    - inference_repair | default(false) | bool
+    - vllm_probe.status | default(0) != 200
   changed_when: true
 
 - name: Probe authenticated LiteLLM
@@ -38,7 +40,9 @@
       - "{{ litellm_wrapper }}"
       - start
       - qwen36
-  when: litellm_probe.rc != 0
+  when:
+    - inference_repair | default(false) | bool
+    - litellm_probe.rc != 0
   changed_when: true
 
 - name: Recheck authenticated LiteLLM

@@ -8,6 +8,8 @@
 
     - name: Recover the existing inference stack
       ansible.builtin.include_tasks: tasks/inference.yml
+      vars:
+        inference_repair: true
 
     - name: Start the OpenClaw gateway
       ansible.builtin.systemd_service:
