@@ -1,0 +1,90 @@
+[
+  {
+    "schema_version": "1.0",
+    "event_id": "evt-normal-001",
+    "timestamp": "2026-03-15T14:00:00Z",
+    "source_type": "openshell",
+    "actor": "business-agent",
+    "user": "alice",
+    "device": "gb10",
+    "action": "read_file",
+    "attributes": {
+      "path": "/workspace/project/README.md",
+      "binary": "/usr/bin/cat",
+      "pid": 4102,
+      "class": "FILE:READ",
+      "severity": "INFO",
+      "disposition": "ALLOWED",
+      "policy": "workspace-read",
+      "engine": "opa",
+      "reason": "allowed by filesystem_policy",
+      "outside_work_hours": false
+    }
+  },
+  {
+    "schema_version": "1.0",
+    "event_id": "evt-normal-002",
+    "timestamp": "2026-03-15T14:00:05Z",
+    "source_type": "squid",
+    "actor": "business-agent",
+    "user": "alice",
+    "device": "gb10",
+    "action": "http_get",
+    "destination": "docs.internal.example",
+    "request_bytes": 612,
+    "attributes": {
+      "method": "GET",
+      "uri": "https://docs.internal.example/api-reference",
+      "status": 200,
+      "response_bytes": 48213,
+      "mime": "text/html",
+      "result": "TCP_MISS/200",
+      "outside_work_hours": false,
+      "asset_has_kev": false
+    }
+  },
+  {
+    "schema_version": "1.0",
+    "event_id": "evt-normal-003",
+    "timestamp": "2026-03-15T14:05:00Z",
+    "source_type": "squid",
+    "actor": "business-agent",
+    "user": "alice",
+    "device": "gb10",
+    "action": "http_get",
+    "destination": "pypi.org",
+    "request_bytes": 584,
+    "attributes": {
+      "method": "GET",
+      "uri": "https://pypi.org/simple/requests/",
+      "status": 200,
+      "response_bytes": 52140,
+      "mime": "text/html",
+      "result": "TCP_MISS/200",
+      "outside_work_hours": false,
+      "asset_has_kev": false
+    }
+  },
+  {
+    "schema_version": "1.0",
+    "event_id": "evt-normal-004",
+    "timestamp": "2026-03-15T14:05:30Z",
+    "source_type": "openshell",
+    "actor": "business-agent",
+    "user": "alice",
+    "device": "gb10",
+    "action": "write_file",
+    "attributes": {
+      "path": "/workspace/project/notes.md",
+      "binary": "/usr/bin/tee",
+      "pid": 4118,
+      "class": "FILE:WRITE",
+      "severity": "INFO",
+      "disposition": "ALLOWED",
+      "policy": "workspace-write",
+      "engine": "opa",
+      "reason": "allowed by filesystem_policy",
+      "outside_work_hours": false
+    }
+  }
+]
