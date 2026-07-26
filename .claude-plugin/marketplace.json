@@ -1,0 +1,14 @@
+{
+  "name": "dell-x-nvidia-hackathon-local",
+  "owner": {
+    "name": "v-x",
+    "email": "v-x@xenophon.dev"
+  },
+  "plugins": [
+    {
+      "name": "nemoclaw-lessons",
+      "source": "./claude-plugin",
+      "description": "NemoClaw/OpenShell operating skills learned from GB10 hackathon trial runs: fan-out limits, per-agent data boundaries, egress audit, and local inference routing."
+    }
+  ]
+}

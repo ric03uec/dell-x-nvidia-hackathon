@@ -2,14 +2,8 @@
   "extraKnownMarketplaces": {
     "dell-x-nvidia-hackathon-local": {
       "source": {
-        "source": "settings",
-        "name": "dell-x-nvidia-hackathon-local",
-        "plugins": [
-          {
-            "name": "nemoclaw-lessons",
-            "source": "./claude-plugin"
-          }
-        ]
+        "source": "github",
+        "repo": "ric03uec/dell-x-nvidia-hackathon"
       }
     }
   },
