@@ -88,6 +88,13 @@ def main() -> int:
         return 1
 
     schema = load_json(EVENT_SCHEMA_PATH)
+    if not isinstance(schema, dict):
+        print(
+            f"FAILED:\n  - schema is not a JSON object: {EVENT_SCHEMA_PATH}",
+            file=sys.stderr,
+        )
+        return 1
+
     fixture_files = sorted(EXPECTED_DIR.glob("*.json"))
 
     if not fixture_files:
