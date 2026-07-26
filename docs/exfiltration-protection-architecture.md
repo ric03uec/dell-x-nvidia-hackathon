@@ -103,6 +103,51 @@ Use one Docker Compose deployment with six services:
 
 PostgreSQL can also hold MVP jobs. Do not add Kafka, Kubernetes, a separate feature store, or production endpoint agents during the hackathon.
 
+### Tool categories
+
+The architecture uses generic capabilities. The named products are replaceable implementations.
+
+| Generic category | What it does | MVP choice | Other/eventual options |
+|---|---|---|---|
+| Forward web proxy | Routes and controls user web traffic | **Squid** | Envoy or another enterprise secure web gateway |
+| Proxy content adaptation | Sends approved decrypted HTTP content to a scanner | None for MVP | C-ICAP, custom ICAP, or eCAP service |
+| Log collector/shipper | Tails, buffers, and forwards logs | Python collector | Vector, Fluent Bit, Filebeat, rsyslog |
+| Ingestion API | Accepts normalized local events | FastAPI | Go service or enterprise event gateway |
+| Event database | Stores events, labels, assets, and configuration | PostgreSQL | PostgreSQL plus an analytical/event store |
+| Network metadata sensor | Describes traffic that may bypass the proxy | None for MVP | Zeek |
+| IDS/IPS | Detects known network attacks and signatures | None for MVP | Suricata or Snort |
+| Flow collector | Records source, destination, duration, and byte counts | Squid metadata only | NetFlow/IPFIX, ntopng |
+| Endpoint telemetry agent | Identifies user, process, file, and device activity | Generated demo events | osquery, Wazuh, Sysmon, auditd, Falco, or a custom signed agent |
+| Asset discovery | Finds authorized hosts and exposed services | Nmap | Enterprise asset inventory/CMDB |
+| Vulnerability scanner | Tests assets for known weaknesses | Nmap context only | Greenbone/OpenVAS, Nessus, Nuclei, Trivy |
+| Vulnerability intelligence | Supplies known vulnerability and exploitation context | Local CVE/NVD and CISA KEV snapshot | Vendor advisories and controlled feed synchronization |
+| Threat intelligence | Supplies malicious domains, IPs, hashes, and reputation | Small local denylist | MISP, OpenCTI, or approved commercial/community feeds |
+| Content/DLP classifier | Detects sensitive data when content is legitimately visible | Simulated sensitivity metadata | YARA, Presidio, Hyperscan, or an ICAP DLP service |
+| Live anomaly detector | Scores each event quickly | scikit-learn Isolation Forest | Gradient-boosted model or distilled neural model |
+| Offline anomaly trainer | Finds deeper historical or sequence anomalies | PyTorch autoencoder | Temporal transformer or graph model |
+| Local model gateway | Gives applications one API for locally hosted models | LiteLLM | Direct backend APIs |
+| Local inference backend | Executes the models on the GB10 GPU | Existing GB10 local backend | vLLM, llama.cpp, Ollama, or TensorRT-LLM |
+| Analyst dashboard | Displays incidents and captures decisions | Streamlit | React application, Grafana, or SIEM integration |
+| Enforcement point | Applies an approved response | Squid ACL/denylist | Squid external ACL, firewall, DNS filter, or EDR isolation |
+| Deployment/orchestration | Installs and runs local services | Docker Compose | Kubernetes or an appliance installer |
+
+For the hackathon, the shortest useful chain is:
+
+```text
+Squid (proxy)
+  → Python collector (log shipper)
+  → FastAPI (ingestion)
+  → PostgreSQL (event store)
+  → Isolation Forest (live anomaly detection)
+  → Streamlit (analyst dashboard)
+  → approved Squid ACL (enforcement)
+
+Nightly PostgreSQL snapshot
+  → PyTorch (offline anomaly detection)
+  → LiteLLM (local model gateway)
+  → powerful local model (correlation and explanation)
+```
+
 ## 4. Squid live ingestion
 
 ### 4.1 Explicit proxy
