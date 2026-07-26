@@ -27,6 +27,18 @@ class MockApiTests(unittest.TestCase):
         )
         self.assertEqual(finding["recommendation_ids"], [RECOMMENDATION_ID])
 
+    def test_recommendation_uses_frozen_target_and_scope_fields(self) -> None:
+        api = MockApi()
+        status, response = api.get("/v1/recommendations")
+        self.assertEqual(status, 200)
+        recommendation = response["recommendations"][0]
+        self.assertEqual(recommendation["action_type"], "deny_destination")
+        self.assertEqual(recommendation["target"], "new-receiver.demo.local")
+        self.assertEqual(recommendation["scope"], "business-agent")
+        self.assertIn("expires_at", recommendation)
+        self.assertNotIn("destination", recommendation)
+        self.assertNotIn("constraints", recommendation)
+
     def test_approved_decision_is_idempotent_and_creates_ordered_results(self) -> None:
         api = MockApi()
         status, before = api.get("/v1/enforcement-results")

@@ -874,8 +874,8 @@ function IncidentDrawer({ incident, onClose, onDecision, pending }) {
                 <div className="recommendation-card">
                   <dl>
                     <div><dt>Action</dt><dd className="mono">{recommendation.action_type}</dd></div>
-                    <div><dt>Target</dt><dd className="mono">{recommendation.destination}</dd></div>
-                    <div><dt>Scope</dt><dd>{recommendation.constraints?.actor}</dd></div>
+                    <div><dt>Target</dt><dd className="mono">{recommendation.target}</dd></div>
+                    <div><dt>Scope</dt><dd>{recommendation.scope}</dd></div>
                   </dl>
                   <p>{recommendation.reason}</p>
                   {decided ? (

@@ -97,14 +97,11 @@ class MockApi:
             "finding_id": FINDING_ID,
             "status": status,
             "action_type": "deny_destination",
-            "destination": "new-receiver.demo.local",
+            "target": "new-receiver.demo.local",
+            "scope": "business-agent",
             "reason": "Prevent repeat transfer to the destination identified in the finding.",
+            "expires_at": "2026-07-27T14:01:06Z",
             "created_at": EVENTS_BY_ID["evt-022"]["timestamp"],
-            "constraints": {
-                "destination": "new-receiver.demo.local",
-                "actor": "business-agent",
-                "scope": "network_egress",
-            },
         }
         if self._decision:
             recommendation["decision"] = dict(self._decision)
