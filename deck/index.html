@@ -98,9 +98,13 @@
           <div class="arch-box">Policy<br><small>Audit</small></div>
         </div>
       </div>
-      <div class="no-cloud"><b>×</b><span>NO CLOUD<br>LLM CALLS</span></div>
-      <div class="proof-row"><span>No fallback</span><span>Local database</span><span>Outbound-off demo</span></div>
-      <aside class="notes">The complete data and inference path is inside one boundary. NemoClaw routes investigation to a model hosted on the GB10. There is no cloud fallback. We prove it by disabling outbound access and running the workflow end to end.</aside>
+      <div class="runtime-proof">
+        <article><span>vLLM</span><strong>MTP ON</strong><small>Higher local throughput</small></article>
+        <article><span>CONCURRENCY</span><strong>3 SEQS</strong><small><code>max-num-seqs=3</code></small></article>
+        <article><span>LiteLLM</span><strong>LIVE</strong><small>Today's token usage</small></article>
+        <article class="egress"><span>EGRESS</span><strong>0 CALLS</strong><small>No cloud fallback</small></article>
+      </div>
+      <aside class="notes">The complete data and inference path is inside one boundary. vLLM runs with multi-token prediction and max-num-seqs set to three, our max-throughput configuration that lets multiple consumers share local inference. LiteLLM meters today's token usage, giving us an observable live metric without exporting prompts or telemetry. There is no cloud fallback.</aside>
     </section>
 
     <section class="slide" data-title="Dual-speed detection">

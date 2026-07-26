@@ -89,8 +89,16 @@ This is not another alert generator. SquidWard creates a closed response loop. I
 - Customer telemetry never leaves the GB10
 - The complete demo can run with outbound access disabled
 
+## Local inference is tuned and observable.
+
+| Runtime evidence | Why it matters |
+|---|---|
+| vLLM multi-token prediction enabled | Maximizes local decoding throughput |
+| `max-num-seqs=3` | Allows three concurrent inference sequences for multiple consumers |
+| LiteLLM daily token accounting | Shows token usage for the current day without exporting telemetry |
+
 **Speaker notes (1:55-2:45)**
-The entire data and inference path is inside one boundary. NemoClaw routes the investigation to a model hosted on the GB10. There is no cloud fallback. We can prove that by disabling outbound access and running the same workflow end to end.
+The entire data and inference path is inside one boundary. vLLM runs with multi-token prediction and max-num-seqs set to three, our max-throughput configuration that lets multiple consumers share local inference. LiteLLM meters today's token usage, giving us an observable live metric without exporting prompts or telemetry. There is no cloud fallback.
 
 ---
 
