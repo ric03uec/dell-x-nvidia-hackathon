@@ -8,6 +8,7 @@ export {
   getRecommendations,
   getSystemStatus,
   request,
+  startFindingInvestigation,
   submitRecommendationDecision,
 } from "./client.js";
 
