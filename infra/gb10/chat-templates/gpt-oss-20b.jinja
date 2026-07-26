@@ -1,0 +1,33 @@
+{#-
+  Harmony chat format for openai/gpt-oss-20b.
+  Reference: https://github.com/openai/gpt-oss/blob/main/gpt_oss/chat.py
+  This template emits the developer/system prelude OpenAI requires for the
+  harmony format, then routes each turn into <|start|>role<|message|>...<|end|>
+  blocks. Assistant generation is opened with <|start|>assistant.
+-#}
+{%- set system_prelude -%}
+You are ChatGPT, a large language model trained by OpenAI.
+Knowledge cutoff: 2024-06
+Current date: {{ date_string if date_string else "2024-01-01" }}
+
+Reasoning: medium
+
+# Valid channels: analysis, commentary, final. Channel must be included for every message.
+{%- endset -%}
+{%- if messages[0]['role'] == 'system' -%}
+    {{- '<|start|>system<|message|>' + (messages[0]['content'] | trim) + '<|end|>' -}}
+    {%- set loop_messages = messages[1:] -%}
+{%- else -%}
+    {{- '<|start|>system<|message|>' + system_prelude + '<|end|>' -}}
+    {%- set loop_messages = messages -%}
+{%- endif -%}
+{%- for message in loop_messages -%}
+    {%- if message['role'] == 'assistant' -%}
+        {{- '<|start|>assistant<|channel|>final<|message|>' + (message['content'] | trim) + '<|end|>' -}}
+    {%- else -%}
+        {{- '<|start|>' + message['role'] + '<|message|>' + (message['content'] | trim) + '<|end|>' -}}
+    {%- endif -%}
+{%- endfor -%}
+{%- if add_generation_prompt -%}
+    {{- '<|start|>assistant' -}}
+{%- endif -%}

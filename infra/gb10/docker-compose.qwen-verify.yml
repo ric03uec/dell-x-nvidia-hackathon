@@ -1,0 +1,41 @@
+services:
+  vllm-qwen3-4b:
+    container_name: vllm-qwen3-4b-verify
+    image: nvcr.io/nvidia/vllm:25.11-py3
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - /home/dell/vllm/hf-cache:/root/.cache/huggingface
+      - /home/dell/vllm/chat-templates:/chat-templates:ro
+    environment:
+      HF_HOME: /root/.cache/huggingface
+      HUGGINGFACE_HUB_CACHE: /root/.cache/huggingface/hub
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    shm_size: "16g"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command:
+      - "vllm"
+      - "serve"
+      - "Qwen/Qwen3-4B-Instruct-2507"
+      - --host
+      - "0.0.0.0"
+      - --gpu-memory-utilization
+      - "0.20"
+      - --max-model-len
+      - "16384"
+      - --max-num-seqs
+      - "4"
+      - --dtype
+      - "auto"
+      - --enable-auto-tool-choice
+      - --tool-call-parser
+      - hermes
+      - --enable-prefix-caching

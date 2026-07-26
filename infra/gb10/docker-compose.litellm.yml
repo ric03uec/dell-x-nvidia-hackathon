@@ -1,0 +1,41 @@
+services:
+  postgres:
+    container_name: hack-litellm-postgres
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: "${LITELLM_DB_PASSWORD}"
+      POSTGRES_DB: litellm
+    volumes:
+      - hack-litellm-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  litellm:
+    container_name: hack-litellm
+    image: ghcr.io/berriai/litellm:v1.88.1
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:4000:4000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /home/dell/vllm/litellm/config.yaml:/app/config.yaml:ro
+    env_file:
+      - /home/dell/vllm/env/litellm.env
+    environment:
+      DATABASE_URL: "postgresql://litellm:${LITELLM_DB_PASSWORD}@postgres:5432/litellm"
+      STORE_MODEL_IN_DB: "True"
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  hack-litellm-postgres-data:
+    name: hack-litellm-postgres-data

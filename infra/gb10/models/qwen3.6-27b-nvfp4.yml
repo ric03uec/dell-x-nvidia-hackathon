@@ -1,0 +1,49 @@
+slug: qwen3.6-27b-nvfp4
+hf_model: nvidia/Qwen3.6-27B-NVFP4
+image: vllm/vllm-openai:v0.24.0-ubuntu2404
+port: 8011
+gpu_memory_utilization: 0.50
+max_model_len: 262144
+max_num_seqs: 8
+dtype: auto
+extra_args:
+  - --tensor-parallel-size
+  - "1"
+  - --trust-remote-code
+  - --kv-cache-dtype
+  - fp8
+  - --max-num-batched-tokens
+  - "8192"
+  - --enable-chunked-prefill
+  - --async-scheduling
+  - --enable-prefix-caching
+  - --speculative-config
+  - '{"method":"mtp","num_speculative_tokens":3}'
+  - --load-format
+  - fastsafetensors
+  - --reasoning-parser
+  - qwen3
+  - --tool-call-parser
+  - qwen3_xml
+  - --enable-auto-tool-choice
+vram_estimate_gib: 60
+mandatory: false
+virtual_models:
+  - name: Qwen3.6-27B-NVFP4
+    chat_template_kwargs:
+      enable_thinking: true
+  - name: qwen3.6-27b-nvfp4
+    chat_template_kwargs:
+      enable_thinking: true
+notes: |
+  NVIDIA ModelOpt NVFP4 quantization of Qwen/Qwen3.6-27B. Cached on inx at
+  ~/vllm/hf-cache/hub/models--nvidia--Qwen3.6-27B-NVFP4, snapshot
+  0893e1606ff3d5f97a441f405d5fc541a6bdf404, size 21G on 2026-07-25.
+
+  DGX Spark candidate from the vLLM Qwen3.6 recipe. Requires newer vLLM than
+  the current NGC 26.06 patched image; keep dormant until explicitly tested.
+  Do not run alongside qwen3.6-27b-fp8 at full 256K context.
+
+  Sources:
+  - https://huggingface.co/nvidia/Qwen3.6-27B-NVFP4
+  - https://recipes.vllm.ai/Qwen/Qwen3.6-27B
