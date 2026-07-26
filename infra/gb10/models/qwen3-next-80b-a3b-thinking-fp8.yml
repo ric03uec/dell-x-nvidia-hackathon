@@ -1,0 +1,48 @@
+slug: qwen3-next-80b-a3b-thinking-fp8
+hf_model: Qwen/Qwen3-Next-80B-A3B-Thinking-FP8
+image: nvcr.io/nvidia/vllm:25.11-py3
+port: 8007
+gpu_memory_utilization: 0.80
+max_model_len: 32768
+max_num_seqs: 2
+dtype: auto
+extra_args:
+  - --reasoning-parser
+  - deepseek_r1
+  - --enable-prefix-caching
+vram_estimate_gib: 95
+mandatory: false
+virtual_models:
+  - name: writer
+    chat_template_kwargs:
+      enable_thinking: false
+    notes: warm-prose mode; no <think> traces
+  - name: reviewer
+    chat_template_kwargs:
+      enable_thinking: true
+    notes: emits <think> reasoning traces for explicit review
+notes: |
+  Qwen3-Next-80B-A3B-Thinking-FP8 — 80B / 3B active MoE at FP8 (~77 GiB on
+  disk, ~74.9 GiB weights at runtime). Single backbone serving writer +
+  reviewer modes via per-request chat_template_kwargs.enable_thinking;
+  see virtual_models above.
+  Native context 262144 (256K); capped at 65536 here for KV pool economy
+  on single GB10. DeepSeek-R1 style <think> tags routed to OpenAI
+  reasoning_content via --reasoning-parser deepseek_r1.
+  Sizing notes — landed on gpu_memory_utilization 0.80 + max_model_len
+  32768 + max_num_seqs 2 after two iterations:
+    - 0.75 / 65536 / 4 → KV init crashed: "No available memory for the
+      cache blocks". Hybrid Mamba+Attention pushes per-block KV cost
+      above the ~14 GiB residue after 74.88 GiB of weights.
+    - 0.85 / 65536 / 2 → startup crashed: "Free memory on device
+      (98.51 GiB) is less than desired GPU memory utilization (0.85,
+      101.72 GiB)". The 4B was already consuming ~16 GiB; 0.85 wants
+      more than what's free with the 4B running.
+    - 0.80 / 32768 / 2 → allocation 95.7 GiB fits in current free pool;
+      KV pool of ~20.8 GiB after weights is comfortably above the
+      ~14.4 GiB that failed at 0.75. max_model_len halved to keep KV
+      demand low for the hybrid mamba-page-size alignment.
+  CANNOT coexist with gemma-4-diffusion (combined weights ~130 GiB >
+  109 GiB usable). Coexists with qwen3-4b-instruct: gpu_util fractions
+  0.80 + 0.12 = 0.92 of the 119.67 GiB pool ≈ 110.1 GiB allocated,
+  ~9.5 GiB headroom for OS / driver / CUDA contexts.

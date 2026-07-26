@@ -1,0 +1,19 @@
+model_list:
+  - model_name: Qwen3.6-27B-FP8
+    model_info:
+      max_input_tokens: 262144
+    litellm_params:
+      model: openai/Qwen/Qwen3.6-27B-FP8
+      api_base: http://vllm-qwen3.6-27b-fp8:8000/v1
+      api_key: dummy
+      extra_body:
+        chat_template_kwargs:
+          enable_thinking: true
+
+litellm_settings:
+  drop_params: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  store_model_in_db: true
+  store_prompts_in_spend_logs: true

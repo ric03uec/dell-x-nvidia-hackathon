@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "dell-x-nvidia-hackathon-local": {
+      "source": {
+        "source": "github",
+        "repo": "ric03uec/dell-x-nvidia-hackathon"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "nemoclaw-lessons@dell-x-nvidia-hackathon-local": true
+  }
+}

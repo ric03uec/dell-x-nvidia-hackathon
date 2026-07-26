@@ -1,0 +1,6 @@
+# Laptop toolchain. nemoclaw/openshell are NOT here on purpose — they are
+# installed on the Spark itself by NVIDIA's installer, and scripts/doctor.sh
+# checks them over ssh.
+[tools]
+just = "1.54"
+uv = "0.11"

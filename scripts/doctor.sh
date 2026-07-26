@@ -41,11 +41,15 @@ fi
 
 # remote <shell-command-string> -- runs on $host over ssh, or directly on
 # this machine (bash -c) when $host is "local"/"localhost".
+#
+# PATH is set explicitly: a non-interactive ssh shell skips the profile that
+# adds ~/.local/bin, so uv-installed tools (openshell) look absent when they
+# are not.
 remote() {
     if [[ $local_mode -eq 1 ]]; then
         bash -c "$1"
     else
-        ssh "$host" "$1"
+        ssh "$host" "export PATH=\$HOME/.local/bin:\$PATH; $1"
     fi
 }
 

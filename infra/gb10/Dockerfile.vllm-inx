@@ -1,0 +1,11 @@
+# vllm-inx:26.06-py3-patched — reconstructed from `docker history` on gb10.
+# The running image is the NGC base plus exactly one added layer.
+#
+#   docker build -f Dockerfile.vllm-inx -t vllm-inx:26.06-py3-patched .
+#
+# ponytail: base tag pinned by name, not digest — nvcr.io needs an NGC login
+# and can rotate tags. If reproducibility matters more than convenience, pin
+# the digest, or keep a `docker save` tarball as insurance.
+FROM nvcr.io/nvidia/vllm:26.06-py3
+
+RUN pip install --no-cache-dir "prometheus-fastapi-instrumentator>=8.0.1"

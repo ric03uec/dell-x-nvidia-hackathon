@@ -1,0 +1,18 @@
+slug: kokoro-82m
+hf_model: hexgrad/Kokoro-82M
+runtime: kokoro-tts
+vllm_supported: false
+mandatory: false
+notes: |
+  Kokoro-82M is a text-to-speech model, not a vLLM OpenAI chat/completions LLM.
+  This file records the cached model in the vLLM model registry directory but is
+  intentionally not runnable by the existing docker-compose.yml.j2 template.
+
+  Cached on inx at ~/vllm/hf-cache/hub/models--hexgrad--Kokoro-82M, snapshot
+  f3ff3571791e39611d31c381e3a41a3af07b4987, size 347M on 2026-07-25.
+
+  To serve Kokoro, add a separate TTS runtime/wrapper instead of adding this
+  slug to vllm_active_models.
+
+  Source:
+  - https://huggingface.co/hexgrad/Kokoro-82M

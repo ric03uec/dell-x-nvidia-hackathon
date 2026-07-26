@@ -1,0 +1,40 @@
+slug: qwen3-4b-instruct
+hf_model: Qwen/Qwen3-4B-Instruct-2507
+image: nvcr.io/nvidia/vllm:25.11-py3
+port: 8006
+gpu_memory_utilization: 0.10
+max_model_len: 16384
+max_num_seqs: 8
+dtype: auto
+extra_args:
+  - --enable-auto-tool-choice
+  - --tool-call-parser
+  - hermes
+  - --enable-prefix-caching
+vram_estimate_gib: 11
+mandatory: false
+virtual_models:
+  # No real thinking mode on this checkpoint — enable_thinking: false is a
+  # structural no-op kwarg, present only to satisfy the j2 template (it
+  # requires a non-empty chat_template_kwargs per virtual_models entry).
+  - name: Qwen3-4B-Instruct
+    chat_template_kwargs:
+      enable_thinking: false
+    notes: canonical model name for non-agent callers (e.g. OpenCode)
+  - name: qwen3-4b-instruct
+    chat_template_kwargs:
+      enable_thinking: false
+    notes: lowercase-slug alias retained for stability; same backend as the canonical name
+notes: |
+  Fast summarization / quick-inference companion to qwen3-next-80b-a3b-instruct-fp8.
+  4.0B / 3.6B non-embedding. Native context 262144 (256K).
+  gpu_memory_utilization 0.10 (~12 GiB) sized to coexist with the 80B at
+  0.80 (combined 0.90 of pool, ~12 GiB free for CUDA/OS).
+  max_model_len 16384 (was 32768): the 0.10 allocation leaves only
+  ~3.5 GiB for KV pool after 8 GiB of weights; a 32k single-sequence
+  KV demand (~4.8 GiB) does not fit. 16k single-sequence (~2.4 GiB)
+  fits with ~1 GiB margin.
+  Bump to ~0.20 + max_model_len 32768 if running this model alone
+  (no 80B), or drop 80B to 0.78 to widen 4B's slot.
+  Recommended sampling per Qwen: temperature 0.7, top_p 0.8, top_k 20 — pass
+  these in API requests, not as serve-time flags. Non-thinking mode only.

@@ -6,6 +6,7 @@ set shell := ["bash", "-uc"]
 agents_dir := "agents"
 lib := "libs/agentkit"
 template := "hello-agent"
+gb10 := "dell-gb10"
 
 # List available recipes
 [group('workspace')]
@@ -62,3 +63,23 @@ new name:
 [group('deploy')]
 deploy name host +flags="--source":
     ./scripts/deploy.sh {{ agents_dir }}/{{ name }} {{ host }} {{ flags }}
+
+# Push infra/gb10 config to the box. Never ships secrets or model weights.
+[group('gb10')]
+gb10-push:
+    ./infra/gb10/provision.sh config
+
+# Restart vLLM and LiteLLM together on a profile: qwen36 | qwen-next-thinking
+[group('gb10')]
+gb10-restart profile="qwen36":
+    ssh {{ gb10 }} 'bin/hack-vllm-large-qwen start {{ profile }}'
+    ssh {{ gb10 }} 'bin/hack-litellm-large-qwen start {{ profile }}'
+
+# Show what's running and what each endpoint actually serves
+[group('gb10')]
+gb10-status:
+    @ssh {{ gb10 }} 'bin/hack-vllm-large-qwen status'
+    @printf '\nvLLM :8000 serves: '
+    @ssh {{ gb10 }} 'bin/hack-vllm-large-qwen models' | jq -r '.data[].id'
+    @printf 'LiteLLM :4000 serves: '
+    @ssh {{ gb10 }} 'bin/hack-litellm-large-qwen models' | jq -r '.data[].id'

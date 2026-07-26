@@ -1,0 +1,52 @@
+slug: nemotron-3-nano-30b-a3b-nvfp4
+hf_model: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4
+image: nvcr.io/nvidia/vllm:25.12.post1-py3
+port: 8013
+gpu_memory_utilization: 0.50
+max_model_len: 262144
+max_num_seqs: 4
+dtype: auto
+environment:
+  VLLM_USE_FLASHINFER_MOE_FP4: "1"
+  VLLM_FLASHINFER_MOE_BACKEND: throughput
+extra_args:
+  - --tensor-parallel-size
+  - "1"
+  - --trust-remote-code
+  - --enable-auto-tool-choice
+  - --tool-call-parser
+  - qwen3_coder
+  - --reasoning-parser-plugin
+  - /root/.cache/huggingface/hub/models--nvidia--NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4/snapshots/ce1b118ae66ec705d02c241525192832eb045fd3/nano_v3_reasoning_parser.py
+  - --reasoning-parser
+  - nano_v3
+  - --kv-cache-dtype
+  - fp8
+vram_estimate_gib: 60
+mandatory: false
+virtual_models:
+  - name: NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4
+    chat_template_kwargs:
+      enable_thinking: true
+  - name: nemotron-3-nano-30b-a3b-nvfp4
+    chat_template_kwargs:
+      enable_thinking: true
+  - name: nemotron-3-nano-fast
+    chat_template_kwargs:
+      enable_thinking: false
+notes: |
+  Official HF repo is nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4. The shorter
+  requested ID nvidia/Nemotron-3-Nano-30B-A3B-NVFP4 does not resolve publicly.
+
+  Cached on inx at
+  ~/vllm/hf-cache/hub/models--nvidia--NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4,
+  snapshot ce1b118ae66ec705d02c241525192832eb045fd3, size 19G on 2026-07-25.
+  Verification found no .incomplete files and all five safetensor shards.
+
+  The model card recommends NGC vLLM 25.12.post1-py3 on DGX Spark/Jetson Thor,
+  trust_remote_code, FlashInfer FP4 MoE env vars, qwen3_coder tool parser, and
+  the repository's nano_v3 reasoning parser plugin. This config is dormant and
+  untested in the local compose stack.
+
+  Source:
+  - https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4
