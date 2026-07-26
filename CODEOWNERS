@@ -1,0 +1,9 @@
+# Shared surfaces every component depends on — changes here need review
+# rather than a single component owner's say-so. See CLAUDE.md's "The one
+# rule" section. Component directories under agents/ and services/ are
+# intentionally NOT listed here so owners aren't blocked on each other.
+
+/contracts/       @ric03uec
+/pyproject.toml   @ric03uec
+/uv.lock          @ric03uec
+/justfile         @ric03uec

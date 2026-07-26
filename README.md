@@ -54,11 +54,19 @@ leaves you a self-contained project: its own `pyproject.toml`, `uv.lock`,
 
 ## The one rule
 
-**A branch or worktree building agent `X` touches only `agents/X/**`.**
+**One owner per component directory** — `agents/<name>/`, `services/<name>/`,
+or `libs/<name>/`. Stay inside yours and parallel worktrees merge cleanly.
 
-There is no central registry to append to and no shared lockfile, so any
-number of agent worktrees merge to `main` without conflicting. Changes to
-`libs/` or the root `justfile` are their own separate change.
+The shared surfaces are CODEOWNERS-gated and need review: `contracts/`, the
+root `pyproject.toml`, `uv.lock`, and the root `justfile`.
+
+`uv.lock` is a single root lock shared by every Python member, so it *will*
+conflict. It is machine-generated — never hand-edit it. Take one side and
+regenerate:
+
+```bash
+just relock          # or: just relock theirs
+```
 
 ## Deploy to the Spark
 
