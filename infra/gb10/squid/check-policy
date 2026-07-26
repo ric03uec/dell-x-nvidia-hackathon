@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""Squid external_acl helper: ask ingestion whether a destination is denied.
+
+Squid feeds one request per line on stdin and expects one verdict per line on
+stdout. Wire it up with (architecture §7, "Eventual live policy check"):
+
+    external_acl_type exfil_policy ttl=10 negative_ttl=2 %SRC %LOGIN %DST \\
+        /usr/local/bin/check-policy
+    acl exfil_denied_dynamic external exfil_policy
+    http_access deny exfil_denied_dynamic
+
+"OK" means the ACL MATCHED, i.e. this destination is denied. "ERR" means no
+match, i.e. allowed. That reads backwards the first time; it is squid's
+convention, not ours.
+
+Deliberately dumb: no LLM, no GPU, no model. It asks one cached, deterministic
+question and answers in milliseconds, because it sits in the request path.
+Squid's ttl=10 does the caching, so this stays stateless.
+
+FAIL-OPEN, by decision. If ingestion is slow, down, or garbling, this ALLOWS
+and logs loudly to stderr (which squid collects into cache.log). Rationale: a
+dead analytics service must not take the business offline, and the approved
+denylist file (the MVP path, `dstdomain "exfil-denied-domains.txt"`) is still
+enforced independently — so a failure here degrades to the durable denylist
+rather than to nothing. Set EXFIL_FAIL_CLOSED=1 to invert it where blocking
+matters more than availability.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+
+API = os.environ.get("INGESTION_URL", "http://127.0.0.1:8100")
+TIMEOUT = float(os.environ.get("EXFIL_TIMEOUT", "0.5"))
+FAIL_CLOSED = os.environ.get("EXFIL_FAIL_CLOSED") == "1"
+
+DENY, ALLOW = "OK", "ERR"
+
+
+def denied(dst: str) -> bool:
+    url = f"{API}/v1/rules/check?" + urllib.parse.urlencode({"dst": dst})
+    with urllib.request.urlopen(url, timeout=TIMEOUT) as response:  # noqa: S310
+        import json
+
+        return bool(json.load(response)["denied"])
+
+
+def main() -> None:
+    for line in sys.stdin:
+        fields = line.split()
+        if not fields:
+            continue
+        # %SRC %LOGIN %DST — DST is what we key on. Squid URL-encodes fields.
+        dst = urllib.parse.unquote(fields[-1])
+
+        try:
+            verdict = DENY if denied(dst) else ALLOW
+        except (urllib.error.URLError, OSError, ValueError, KeyError) as exc:
+            verdict = DENY if FAIL_CLOSED else ALLOW
+            print(
+                f"check-policy: ingestion unreachable ({exc}); "
+                f"failing {'closed' if FAIL_CLOSED else 'open'} for {dst}",
+                file=sys.stderr,
+                flush=True,
+            )
+
+        print(verdict, flush=True)
+
+
+if __name__ == "__main__":
+    main()
