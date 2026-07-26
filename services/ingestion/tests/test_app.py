@@ -35,7 +35,16 @@ SQUID_EVENT: dict[str, Any] = {
 
 @pytest.fixture(autouse=True)
 def clean_db() -> Iterator[None]:
-    for table in ("events", "findings", "recommendations", "rules"):
+    for table in (
+        "events",
+        "findings",
+        "recommendations",
+        "decisions",
+        "enforcement_results",
+        "finding_labels",
+        "snapshots",
+        "rules",
+    ):
         conn.execute(f"DELETE FROM {table}")
     conn.commit()
     yield
@@ -82,11 +91,74 @@ def test_unknown_fields_are_preserved_not_rejected(client: TestClient) -> None:
     assert "future_field" in raw
 
 
+def test_canonical_pipeline_is_persisted_and_returned_in_contract_shape(
+    client: TestClient,
+) -> None:
+    event = {
+        "schema_version": "1.0",
+        "event_id": "evt-canonical-001",
+        "timestamp": "2026-07-26T14:00:00Z",
+        "source_type": "mitmproxy",
+        "actor": "business-agent",
+        "action": "http_post",
+        "destination": "receiver.demo.local",
+        "request_bytes": 25_000_000,
+        "attributes": {"body_stored": False},
+    }
+    finding = {
+        "schema_version": "1.0",
+        "finding_id": "finding-canonical-001",
+        "event_ids": [event["event_id"]],
+        "risk_score": 95,
+        "severity": "critical",
+        "detectors": ["large_transfer"],
+        "summary": "Synthetic suspicious transfer.",
+    }
+    recommendation = {
+        "schema_version": "1.0",
+        "recommendation_id": "rec-canonical-001",
+        "finding_id": finding["finding_id"],
+        "action_type": "deny_destination",
+        "target": "receiver.demo.local",
+        "scope": "business-agent",
+        "reason": "Synthetic evidence exceeded the threshold.",
+    }
+
+    assert client.post("/v1/events", json=event).status_code == 201
+    assert client.post("/v1/findings", json=finding).status_code == 201
+    assert client.post("/v1/recommendations", json=recommendation).status_code == 201
+    returned = client.get("/v1/events").json()["events"][0]
+    assert returned["event_id"] == event["event_id"]
+    assert returned["action"] == event["action"]
+    assert returned["attributes"] == event["attributes"]
+    assert returned["finding_id"] == finding["finding_id"]
+
+    decision = client.post(
+        "/v1/recommendations/rec-canonical-001/decision",
+        json={"schema_version": "1.0", "decision": "approved"},
+    )
+    assert decision.status_code == 200
+    assert decision.json()["decision"]["decision"] == "approved"
+    assert client.get("/v1/rules/check", params={"dst": "receiver.demo.local"}).json()["denied"]
+
+    enforcement = {
+        "schema_version": "1.0",
+        "enforcement_result_id": "enf-canonical-001",
+        "recommendation_id": "rec-canonical-001",
+        "status": "applied",
+    }
+    assert client.post("/v1/enforcement-results", json=enforcement).status_code == 201
+    assert client.get("/v1/enforcement-results").json()["count"] == 1
+    snapshot = client.post("/v1/snapshots")
+    assert snapshot.status_code == 201
+    assert client.get(f"/v1/snapshots/{snapshot.json()['snapshot_id']}").status_code == 200
+
+
 # --- the path that actually enforces ------------------------------------
 
 
 def test_recommendation_only_becomes_a_rule_after_approval(client: TestClient) -> None:
-    rec_id = store.add_recommendation(conn, "block_destination", "evil.test", "25MB upload")
+    rec_id = store.add_recommendation(conn, "deny_destination", "evil.test", "25MB upload")
 
     # Pending: nothing is denied yet.
     assert client.get("/v1/rules").json()["rules"] == []
@@ -105,7 +177,7 @@ def test_recommendation_only_becomes_a_rule_after_approval(client: TestClient) -
 
 
 def test_rejection_does_not_create_a_rule(client: TestClient) -> None:
-    rec_id = store.add_recommendation(conn, "block_destination", "fine.test", "false positive")
+    rec_id = store.add_recommendation(conn, "deny_destination", "fine.test", "false positive")
     client.post(
         f"/v1/recommendations/{rec_id}/decision",
         json={"approve": False, "actor": "analyst@example.test"},
@@ -114,7 +186,7 @@ def test_rejection_does_not_create_a_rule(client: TestClient) -> None:
 
 
 def test_rules_txt_is_squid_dstdomain_format(client: TestClient) -> None:
-    rec_id = store.add_recommendation(conn, "block_destination", "evil.test", "why")
+    rec_id = store.add_recommendation(conn, "deny_destination", "evil.test", "why")
     client.post(
         f"/v1/recommendations/{rec_id}/decision",
         json={"approve": True, "actor": "a@b.test"},
@@ -126,7 +198,7 @@ def test_rules_txt_is_squid_dstdomain_format(client: TestClient) -> None:
 
 
 def test_check_matches_subdomains(client: TestClient) -> None:
-    rec_id = store.add_recommendation(conn, "block_destination", "evil.test", "why")
+    rec_id = store.add_recommendation(conn, "deny_destination", "evil.test", "why")
     client.post(
         f"/v1/recommendations/{rec_id}/decision",
         json={"approve": True, "actor": "a@b.test"},
@@ -197,7 +269,7 @@ async def test_mcp_recommendation_is_visible_to_rest(client: TestClient) -> None
         result = await mcp_client.call_tool(
             "recommend_policy",
             {
-                "action_type": "block_destination",
+                "action_type": "deny_destination",
                 "destination": "evil.test",
                 "rationale": "25MB to an unseen host",
             },

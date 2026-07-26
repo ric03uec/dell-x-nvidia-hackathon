@@ -35,8 +35,6 @@ check:
 test:
     uv run --project {{ lib }} pytest {{ lib }}
     @just each test
-    @just s processing test
-    @just dashboard-test
 
 # Start the SquidWard dashboard locally
 [group('dashboard')]

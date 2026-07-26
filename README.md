@@ -21,10 +21,12 @@ just dashboard-demo        # run SquidWard with preloaded mock data
 just demo-pipeline         # generate → ingest → detect → recommend → dashboard
 ```
 
-`just demo-pipeline` starts an empty stateful demo API, posts all 26 synthetic
-events, runs them through deterministic rules and the promoted Isolation Forest,
-stores the resulting finding and constrained recommendation through the API, and
-then launches the dashboard at `http://127.0.0.1:8300`.
+`just demo-pipeline` starts the durable SQLite ingestion API, posts all 26
+synthetic events, runs them through deterministic rules and the promoted
+Isolation Forest, stores the resulting finding and constrained recommendation,
+and launches the dashboard at `http://127.0.0.1:8300`. Data remains available
+in `data/demo-pipeline.db` after the demo stops. Set `DEMO_PIPELINE_RESET=0` to
+reuse the existing database instead of resetting it at startup.
 
 On the GB10, the dashboard API reads GPU utilization from `nvidia-smi` and
 unified-memory usage from `/proc/meminfo`. Configure `.env`, then run:
