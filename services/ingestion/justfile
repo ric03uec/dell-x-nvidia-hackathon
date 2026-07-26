@@ -1,0 +1,26 @@
+# services/ingestion — REST + MCP + the rules surface Squid reads.
+# Root verbs: just s ingestion check | just s ingestion test | just s ingestion run
+
+set shell := ["bash", "-uc"]
+
+# List available recipes
+default:
+    @just --list
+
+# Sync this member's dependencies
+setup:
+    uv sync --project .
+
+# Lint, format-check and typecheck
+check:
+    uv run --project . ruff check src tests
+    uv run --project . ruff format --check src tests
+    uv run --project . mypy src
+
+# Run the tests
+test:
+    uv run --project . pytest tests -q
+
+# Serve locally. Port 8100 per docs/ports.md — that file is the table of record.
+run port="8100" db="./events.db":
+    INGESTION_DB={{ db }} uv run --project . uvicorn ingestion.app:app --host 127.0.0.1 --port {{ port }}

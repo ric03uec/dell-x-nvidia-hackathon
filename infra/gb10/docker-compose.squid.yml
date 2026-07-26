@@ -1,0 +1,27 @@
+# Its OWN compose project, deliberately. Every compose file in /home/dell/vllm
+# otherwise inherits the project name `vllm` from the directory, which makes
+# every stack an "orphan" of every other one — a single
+# `compose -f <one-file> up -d --remove-orphans` then evicts the containers
+# belonging to the other files. That is not hypothetical: it removed hack-squid
+# and both LiteLLM containers on 2026-07-26 while this was being deployed.
+name: hack-squid
+
+services:
+  squid:
+    container_name: hack-squid
+    image: ubuntu/squid:6.6-24.04_edge
+    restart: unless-stopped
+    ports:
+      # Explicit-proxy port for LAN clients. The box is dual-homed
+      # (enP7s7 192.168.0.100, wlP9s9 172.16.10.127); bind both.
+      - "0.0.0.0:3128:3128"
+    volumes:
+      - /home/dell/vllm/squid/squid.conf:/etc/squid/squid.conf:ro
+      - hack-squid-logs:/var/log/squid
+
+volumes:
+  # A named volume, not a bind mount: squid writes as uid 13 (proxy) and a host
+  # directory would need chowning to match. Read the log through the container:
+  #   docker exec hack-squid tail -f /var/log/squid/access.log
+  hack-squid-logs:
+    name: hack-squid-logs
