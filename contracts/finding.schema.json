@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dell-x-nvidia-hackathon.local/contracts/finding.schema.json",
+  "title": "Finding",
+  "description": "A processing-stage detection linking canonical events into a scored incident. See docs/modular-implementation-plan.md section 3.2.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "finding_id",
+    "event_ids",
+    "risk_score",
+    "severity"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "finding_id": {
+      "type": "string"
+    },
+    "event_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "risk_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+    "detectors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "summary": {
+      "type": "string"
+    },
+    "model_version": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

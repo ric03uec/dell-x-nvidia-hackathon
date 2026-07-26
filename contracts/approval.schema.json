@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dell-x-nvidia-hackathon.local/contracts/approval.schema.json",
+  "title": "Approval Decision",
+  "description": "An analyst's explicit decision on a policy recommendation, submitted via POST /v1/recommendations/{id}/decision. See docs/modular-implementation-plan.md section 3.4.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "recommendation_id",
+    "decision",
+    "analyst",
+    "timestamp"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "recommendation_id": {
+      "type": "string"
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["approved", "rejected"]
+    },
+    "analyst": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": true
+}

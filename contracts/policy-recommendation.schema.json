@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dell-x-nvidia-hackathon.local/contracts/policy-recommendation.schema.json",
+  "title": "Policy Recommendation",
+  "description": "A constrained, analyst-reviewable policy recommendation emitted by the security agent. See docs/modular-implementation-plan.md section 3.3. action_type is intentionally a CLOSED enumeration: integration rule 5 forbids a generative model from emitting arbitrary executable policy or shell commands, and only predefined, analyst-approved actions may reach the infrastructure adapter (rule 6). Adding a new action_type requires a reviewed contract change, not a model output.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "recommendation_id",
+    "finding_id",
+    "action_type",
+    "target",
+    "scope"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "recommendation_id": {
+      "type": "string"
+    },
+    "finding_id": {
+      "type": "string"
+    },
+    "action_type": {
+      "type": "string",
+      "description": "Closed set of enforcement actions the infrastructure adapter knows how to apply. deny_destination is the only value the MVP needs.",
+      "enum": ["deny_destination"]
+    },
+    "target": {
+      "type": "string",
+      "description": "Object the action applies to, e.g. a destination host."
+    },
+    "scope": {
+      "type": "string",
+      "description": "Actor/agent the action is scoped to."
+    },
+    "reason": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}
