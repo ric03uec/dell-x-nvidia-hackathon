@@ -1,5 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  getEnforcementResults,
+  getFinding,
+  getRecommendations,
+  submitRecommendationDecision,
+  toMetricStrip,
+  toRiskEvents,
+  toSystemStatusView,
+} from "./api/index.js";
+import { useDashboardData } from "./api/useDashboardData.js";
+
 const Icon = {
   grid: "M2.5 2.5h4v4h-4zM9.5 2.5h4v4h-4zM2.5 9.5h4v4h-4zM9.5 9.5h4v4h-4z",
   activity: "M1.5 8h2.8l2.2-4.6 2.6 9.2 2-4.6h3.4",
@@ -250,8 +261,21 @@ function App() {
   const [range, setRange] = useState("1D");
   const [query, setQuery] = useState("");
   const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || "dark");
+  const [incident, setIncident] = useState(null);
+  const [decisionPending, setDecisionPending] = useState(false);
   const [title, scope, context] = pageMeta[activePage];
   const needle = query.trim().toLowerCase();
+  const live = useDashboardData(range);
+  const liveEvents = useMemo(() => {
+    const adapted = toRiskEvents(live.events).filter((event) => typeof event.risk === "number");
+    return adapted.length ? adapted.reverse() : riskEvents;
+  }, [live.events]);
+  const overviewMetrics = useMemo(() => {
+    const adapted = toMetricStrip(live.summary, [spark.up, spark.spike, spark.down, spark.flat]);
+    return adapted.length >= 4 ? adapted.slice(0, 4) : null;
+  }, [live.summary]);
+  const system = useMemo(() => toSystemStatusView(live.status), [live.status]);
+  const fixtureFallback = !live.status || !live.summary || !live.events;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -267,9 +291,65 @@ function App() {
     window.setTimeout(() => setToast(""), 2000);
   }
 
+  async function openIncident(findingId) {
+    if (!findingId) {
+      notify("No incident is linked to this event");
+      return;
+    }
+    setIncident({ findingId, loading: true });
+    try {
+      const [findingResponse, recommendationsResponse, enforcementResponse] = await Promise.all([
+        getFinding(findingId),
+        getRecommendations(),
+        getEnforcementResults(findingId),
+      ]);
+      const finding = findingResponse.finding;
+      const recommendation = recommendationsResponse.recommendations?.find(
+        (item) => item.finding_id === findingId,
+      ) ?? null;
+      setIncident({
+        enforcement: enforcementResponse.enforcement_results ?? [],
+        finding,
+        findingId,
+        loading: false,
+        recommendation,
+      });
+    } catch (error) {
+      setIncident({ error: error.message, findingId, loading: false });
+    }
+  }
+
+  async function decideRecommendation(decision) {
+    const recommendation = incident?.recommendation;
+    if (!recommendation || decisionPending) return;
+    setDecisionPending(true);
+    try {
+      const response = await submitRecommendationDecision(
+        recommendation.recommendation_id,
+        decision,
+      );
+      const enforcementResponse = await getEnforcementResults(incident.findingId);
+      setIncident((current) => ({
+        ...current,
+        enforcement: enforcementResponse.enforcement_results ?? [],
+        recommendation: {
+          ...current.recommendation,
+          decision: response.decision,
+          status: response.decision.decision,
+        },
+      }));
+      live.refresh();
+      notify(`Recommendation ${response.decision.decision}`);
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setDecisionPending(false);
+    }
+  }
+
   return (
     <div className="app">
-      <Sidebar activePage={activePage} onNavigate={setActivePage} />
+      <Sidebar activePage={activePage} onNavigate={setActivePage} status={system.appliance} />
 
       <div className="main">
         <header className="topbar">
@@ -293,7 +373,15 @@ function App() {
                 </button>
               ))}
             </div>
-            <button className="icon-button" onClick={() => notify("Refreshed")} title="Refresh" type="button">
+            <button
+              className="icon-button"
+              onClick={() => {
+                live.refresh();
+                notify("Refresh requested");
+              }}
+              title="Refresh"
+              type="button"
+            >
               <Glyph name="refresh" />
             </button>
             <button className="icon-button" onClick={() => notify("No new notifications")} title="Notifications" type="button">
@@ -328,7 +416,9 @@ function App() {
           <div className="chips">
             <span className="chip">env:<b>prod</b></span>
             <span className="chip">site:<b>hq-dc1</b></span>
-            <span className="chip chip-ok"><i /> Observe mode</span>
+            <span className={`chip ${live.stale || fixtureFallback ? "chip-warn" : "chip-ok"}`}>
+              <i /> {live.stale ? "Stale data" : fixtureFallback ? "Fixture fallback" : system.appliance.mode}
+            </span>
           </div>
           <div className="toolbar-right">
             <span className="muted">Auto-refresh 30s</span>
@@ -345,19 +435,36 @@ function App() {
               range={range}
               setPromoted={setPromoted}
               theme={theme}
+              events={liveEvents}
+              metrics={overviewMetrics}
+              onOpenIncident={openIncident}
             />
+          ) : activePage === "events" ? (
+            <LiveEventsPage events={liveEvents} needle={needle} onOpenIncident={openIncident} />
           ) : (
             <DataPage data={pageData[activePage]} needle={needle} notify={notify} />
           )}
         </main>
 
         <footer className="statusbar">
-          <span><i className="live" /> gb10-appliance-01 · 127.0.0.1 · no cloud egress</span>
-          <span className="muted">Ingest 18.2k evt/s · Queue 0 · Model v1.4 · Updated 14:02:11</span>
+          <span>
+            <i className={system.footer.healthy ? "live" : "stale"} /> {system.footer.appliance} · {system.footer.address} · Egress {system.footer.egress}
+          </span>
+          <span className="muted">
+            Ingest {system.footer.ingestRate ?? "Unavailable"} evt/s · Queue {system.footer.queueDepth ?? "Unavailable"} · Model {system.footer.activeModel} · Updated {system.footer.updatedAt}
+          </span>
         </footer>
       </div>
 
       {toast && <div className="toast" role="status">{toast}</div>}
+      {incident && (
+        <IncidentDrawer
+          incident={incident}
+          onClose={() => setIncident(null)}
+          onDecision={decideRecommendation}
+          pending={decisionPending}
+        />
+      )}
     </div>
   );
 }
@@ -376,7 +483,7 @@ function BrandMark() {
   );
 }
 
-function Sidebar({ activePage, onNavigate }) {
+function Sidebar({ activePage, onNavigate, status }) {
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -409,11 +516,11 @@ function Sidebar({ activePage, onNavigate }) {
       </nav>
 
       <div className="appliance">
-        <div className="appliance-row"><span>Appliance</span><b>GB10</b></div>
-        <div className="appliance-row"><span>Mode</span><b className="ok">Observe</b></div>
-        <div className="appliance-row"><span>Egress</span><b>Blocked</b></div>
-        <div className="meter"><i style={{ width: "62%" }} /></div>
-        <p>GPU 62% · 24.1 / 128 GB</p>
+        <div className="appliance-row"><span>Appliance</span><b>{status.model}</b></div>
+        <div className="appliance-row"><span>Mode</span><b className="ok">{status.mode}</b></div>
+        <div className="appliance-row"><span>Egress</span><b>{status.egress}</b></div>
+        <div className="meter"><i style={{ width: `${status.gpuUtilization ?? 0}%` }} /></div>
+        <p>GPU {status.gpuUtilization ?? "Unavailable"}% · {status.gpuMemory}</p>
       </div>
     </aside>
   );
@@ -481,14 +588,14 @@ function MetricStrip({ metrics }) {
   );
 }
 
-function Dashboard({ notify, promoted, setPromoted, range, theme, needle }) {
+function Dashboard({ notify, promoted, setPromoted, range, theme, needle, events, metrics, onOpenIncident }) {
   const visibleCves = cves.filter((cve) => matches(cve, needle));
-  const visibleEvents = riskEvents.filter((event) => matches(event, needle));
+  const visibleEvents = events.filter((event) => matches(event, needle));
 
   return (
     <>
       <MetricStrip
-        metrics={[
+        metrics={metrics ?? [
           ["Events processed", "2.14M", "+8.2%", "neutral", spark.up],
           ["Active alerts", "37", "+5", "negative", spark.spike],
           ["Avg. risk score", "42.6", "-3.1%", "positive", spark.down],
@@ -596,7 +703,7 @@ function Dashboard({ notify, promoted, setPromoted, range, theme, needle }) {
         </Panel>
 
         <Panel
-          action={<CountBadge shown={visibleEvents.length} total={riskEvents.length} />}
+          action={<CountBadge shown={visibleEvents.length} total={events.length} />}
           meta="Rules + isolation forest"
           title="Live high-risk events"
         >
@@ -613,9 +720,11 @@ function Dashboard({ notify, promoted, setPromoted, range, theme, needle }) {
             <tbody>
               {visibleEvents.length === 0 && <EmptyRow span={5} />}
               {visibleEvents.map((event) => {
-                const open = () => notify(`${event.user} → ${event.destination}`);
+                const open = () => event.findingId
+                  ? onOpenIncident(event.findingId)
+                  : notify(`${event.user} → ${event.destination}`);
                 return (
-                  <tr key={event.time} onClick={open} onKeyDown={activateOnKey(open)} tabIndex={0}>
+                  <tr key={event.id ?? event.time} onClick={open} onKeyDown={activateOnKey(open)} tabIndex={0}>
                     <td className="mono dim">{event.time}</td>
                     <td>
                       <span className="cell-lead">{event.user}</span>
@@ -632,6 +741,184 @@ function Dashboard({ notify, promoted, setPromoted, range, theme, needle }) {
         </Panel>
       </div>
     </>
+  );
+}
+
+function LiveEventsPage({ events, needle, onOpenIncident }) {
+  const visible = events.filter((event) => matches(event, needle));
+
+  return (
+    <>
+      <MetricStrip metrics={pageData.events.metrics} />
+      <Panel
+        action={<CountBadge shown={visible.length} total={events.length} />}
+        className="table-panel"
+        meta="Canonical events with their latest assessment"
+        title="Live Event Stream"
+      >
+        <table className="grid-table">
+          <thead>
+            <tr>
+              <th className="w-time">Time</th>
+              <th>User / Device</th>
+              <th>Destination</th>
+              <th className="num">Bytes</th>
+              <th className="w-risk">Risk</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.length === 0 && <EmptyRow span={5} />}
+            {visible.map((event) => {
+              const open = () => onOpenIncident(event.findingId);
+              return (
+                <tr key={event.id ?? event.time} onClick={open} onKeyDown={activateOnKey(open)} tabIndex={0}>
+                  <td className="mono dim">{event.time}</td>
+                  <td>
+                    <span className="cell-lead">{event.user}</span>
+                    <span className="cell-sub">{event.device}</span>
+                  </td>
+                  <td className="truncate dim">{event.destination}</td>
+                  <td className="num mono">{event.bytes}</td>
+                  <td><RiskMeter risk={event.risk} /></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </Panel>
+    </>
+  );
+}
+
+function IncidentDrawer({ incident, onClose, onDecision, pending }) {
+  const finding = incident.finding;
+  const recommendation = incident.recommendation;
+  const decision = recommendation?.decision?.decision ?? null;
+  const decided = decision === "approved" || decision === "rejected";
+
+  return (
+    <div className="drawer-backdrop" onMouseDown={onClose}>
+      <aside
+        aria-label="Incident detail"
+        aria-modal="true"
+        className="incident-drawer"
+        onMouseDown={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <header className="drawer-head">
+          <div>
+            <span className="drawer-eyebrow">Incident investigation</span>
+            <h2>{finding?.title ?? incident.findingId}</h2>
+          </div>
+          <button aria-label="Close incident" className="drawer-close" onClick={onClose} type="button">×</button>
+        </header>
+
+        {incident.loading && <div className="drawer-message">Loading deterministic evidence…</div>}
+        {incident.error && <div className="drawer-message error">{incident.error}</div>}
+
+        {finding && (
+          <div className="drawer-content">
+            <div className="incident-summary">
+              <span className={`score ${finding.severity}`}>{finding.risk_score}</span>
+              <div>
+                <strong>{finding.severity} risk</strong>
+                <p>{finding.summary}</p>
+              </div>
+            </div>
+
+            <DrawerSection meta={`${finding.timeline?.length ?? 0} correlated actions`} title="Cross-action timeline">
+              <table className="grid-table compact drawer-table">
+                <thead>
+                  <tr><th>Time</th><th>Action</th><th>Destination</th></tr>
+                </thead>
+                <tbody>
+                  {finding.timeline?.map((event) => (
+                    <tr key={event.event_id}>
+                      <td className="mono dim">{event.timestamp.slice(11, 19)}</td>
+                      <td>
+                        <span className="cell-lead">{event.action}</span>
+                        <span className="cell-sub">{event.source_type}</span>
+                      </td>
+                      <td className="truncate dim">{event.destination}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </DrawerSection>
+
+            <DrawerSection meta="Deterministic before model prose" title="Risk contributions">
+              <div className="evidence-list">
+                {finding.evidence?.map((item) => (
+                  <div className="evidence-row" key={item.code}>
+                    <span className="evidence-score mono">+{item.score_contribution}</span>
+                    <div><strong>{item.label}</strong><small>{item.event_ids.join(" · ")}</small></div>
+                  </div>
+                ))}
+              </div>
+            </DrawerSection>
+
+            <DrawerSection
+              meta={finding.investigation?.served_model ?? "Unavailable"}
+              title="Local security-agent analysis"
+            >
+              <div className="investigation-copy">
+                <span className={`badge ${finding.investigation?.status === "completed" ? "ok" : "muted"}`}>
+                  <i />{finding.investigation?.status ?? "unavailable"}
+                </span>
+                <p>{finding.investigation?.summary ?? "Deterministic evidence remains available while local inference is unavailable."}</p>
+              </div>
+            </DrawerSection>
+
+            <DrawerSection meta="Dashboard records a decision only" title="Policy recommendation">
+              {recommendation ? (
+                <div className="recommendation-card">
+                  <dl>
+                    <div><dt>Action</dt><dd className="mono">{recommendation.action_type}</dd></div>
+                    <div><dt>Target</dt><dd className="mono">{recommendation.destination}</dd></div>
+                    <div><dt>Scope</dt><dd>{recommendation.constraints?.actor}</dd></div>
+                  </dl>
+                  <p>{recommendation.reason}</p>
+                  {decided ? (
+                    <span className={`badge ${decision === "approved" ? "ok" : "critical"}`}>
+                      <i />{decision}
+                    </span>
+                  ) : (
+                    <div className="decision-actions">
+                      <button className="ghost-button" disabled={pending} onClick={() => onDecision("rejected")} type="button">Reject</button>
+                      <button className="primary-button" disabled={pending} onClick={() => onDecision("approved")} type="button">
+                        {pending ? "Recording…" : "Approve"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : <div className="drawer-message">No recommendation has been issued.</div>}
+            </DrawerSection>
+
+            <DrawerSection meta="Approval is not enforcement" title="Enforcement audit">
+              {incident.enforcement?.length ? (
+                <div className="enforcement-list">
+                  {incident.enforcement.map((result) => (
+                    <div className="enforcement-row" key={result.enforcement_result_id}>
+                      <span className={`badge ${result.status === "block_observed" ? "critical" : "ok"}`}><i />{result.status}</span>
+                      <span className="mono dim">{result.event_id} · {result.observed_at.slice(11, 19)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : <div className="drawer-message">No enforcement action has been recorded.</div>}
+            </DrawerSection>
+          </div>
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function DrawerSection({ children, meta, title }) {
+  return (
+    <section className="drawer-section">
+      <header><h3>{title}</h3><span>{meta}</span></header>
+      {children}
+    </section>
   );
 }
 
@@ -698,6 +985,7 @@ function Cell({ cell, align }) {
 }
 
 function RiskMeter({ risk }) {
+  if (typeof risk !== "number") return <span className="badge muted"><i />Pending</span>;
   const tone = risk >= 80 ? "critical" : risk >= 60 ? "high" : risk >= 40 ? "medium" : "ok";
   return (
     <span className={`risk ${tone}`}>

@@ -16,6 +16,8 @@ just each test             # tests everywhere
 just a hello-agent run     # run one agent's service locally
 just dashboard-setup       # install the SquidWard dashboard dependencies
 just dashboard-dev         # run the dashboard locally
+just s dashboard mock      # run the standalone contract-shaped mock API
+just dashboard-demo        # run SquidWard and its mock API together
 ```
 
 ## Add an agent

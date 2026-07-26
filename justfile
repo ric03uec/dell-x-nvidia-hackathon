@@ -43,23 +43,27 @@ test:
 # Start the SquidWard dashboard locally
 [group('dashboard')]
 dashboard-dev:
-    pnpm --dir {{ dashboard }} dev
+    @just s dashboard dev
+
+# Run SquidWard with its contract-shaped local mock API
+[group('dashboard')]
+dashboard-demo:
+    @just s dashboard demo
 
 # Install the dashboard's pinned dependencies
 [group('dashboard')]
 dashboard-setup:
-    pnpm --dir {{ dashboard }} install --frozen-lockfile
+    @just s dashboard setup
 
 # Lint and typecheck the dashboard
 [group('dashboard')]
 dashboard-check:
-    pnpm --dir {{ dashboard }} lint
-    pnpm --dir {{ dashboard }} typecheck
+    @just s dashboard check
 
 # Build the dashboard as its current test gate
 [group('dashboard')]
 dashboard-test:
-    pnpm --dir {{ dashboard }} test
+    @just s dashboard test
 
 # Check the local toolchain, and a DGX Spark host if one is given
 [group('workspace')]
