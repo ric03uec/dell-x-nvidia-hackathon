@@ -48,10 +48,15 @@ test:
 dashboard-dev:
     @just s dashboard dev
 
-# Run SquidWard with its contract-shaped local mock API
+# Run SquidWard with its preloaded contract-shaped local mock API
 [group('dashboard')]
 dashboard-demo:
     @just s dashboard demo
+
+# Generate events, POST them through the demo API, score them, and launch the dashboard.
+[group('dashboard')]
+demo-pipeline:
+    ./scripts/demo-pipeline.sh
 
 # Install the dashboard's pinned dependencies
 [group('dashboard')]
