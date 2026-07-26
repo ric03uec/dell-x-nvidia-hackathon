@@ -1,0 +1,1 @@
+ts=1773612900.000 src=10.0.0.17 user=alice method=POST uri=https://test-storage.local/upload status=200 req_bytes=25000000 resp_bytes=842 mime=application/octet-stream result=TCP_TUNNEL/200

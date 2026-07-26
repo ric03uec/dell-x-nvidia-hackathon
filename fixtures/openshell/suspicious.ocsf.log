@@ -1,0 +1,3 @@
+[1773611880.000] [sandbox] [OCSF ] [ocsf] FILE:READ [MED] ALLOWED /usr/bin/cat(4210) -> /data/customers/export.csv [policy:workspace-read engine:opa] [reason:allowed by filesystem_policy]
+[1773612300.000] [sandbox] [OCSF ] [ocsf] FILE:WRITE [MED] ALLOWED /usr/bin/tar(4231) -> /tmp/staging/export-2026-03-15.tar.gz [policy:workspace-write engine:opa] [reason:allowed by filesystem_policy]
+[1773612880.000] [sandbox] [OCSF ] [ocsf] NET:OPEN [MED] ALLOWED /usr/bin/curl(4255) -> gb10-proxy.local:3128 [policy:squid-egress engine:opa] [reason:allowed by network_policies]

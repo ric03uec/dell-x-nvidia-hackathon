@@ -1,0 +1,93 @@
+[
+  {
+    "schema_version": "1.0",
+    "event_id": "evt-susp-001",
+    "timestamp": "2026-03-15T21:58:00Z",
+    "source_type": "openshell",
+    "actor": "business-agent",
+    "user": "alice",
+    "device": "gb10",
+    "action": "read_file",
+    "attributes": {
+      "path": "/data/customers/export.csv",
+      "binary": "/usr/bin/cat",
+      "pid": 4210,
+      "class": "FILE:READ",
+      "severity": "MED",
+      "disposition": "ALLOWED",
+      "policy": "workspace-read",
+      "engine": "opa",
+      "reason": "allowed by filesystem_policy",
+      "sensitive": true,
+      "outside_work_hours": true
+    }
+  },
+  {
+    "schema_version": "1.0",
+    "event_id": "evt-susp-002",
+    "timestamp": "2026-03-15T22:05:00Z",
+    "source_type": "openshell",
+    "actor": "business-agent",
+    "user": "alice",
+    "device": "gb10",
+    "action": "archive_file",
+    "attributes": {
+      "path": "/tmp/staging/export-2026-03-15.tar.gz",
+      "source_path": "/data/customers/export.csv",
+      "binary": "/usr/bin/tar",
+      "pid": 4231,
+      "class": "FILE:WRITE",
+      "severity": "MED",
+      "disposition": "ALLOWED",
+      "policy": "workspace-write",
+      "engine": "opa",
+      "reason": "allowed by filesystem_policy",
+      "outside_work_hours": true
+    }
+  },
+  {
+    "schema_version": "1.0",
+    "event_id": "evt-susp-003",
+    "timestamp": "2026-03-15T22:14:40Z",
+    "source_type": "openshell",
+    "actor": "business-agent",
+    "user": "alice",
+    "device": "gb10",
+    "action": "network_egress_attempt",
+    "destination": "gb10-proxy.local:3128",
+    "attributes": {
+      "binary": "/usr/bin/curl",
+      "pid": 4255,
+      "class": "NET:OPEN",
+      "severity": "MED",
+      "disposition": "ALLOWED",
+      "policy": "squid-egress",
+      "engine": "opa",
+      "reason": "allowed by network_policies",
+      "outside_work_hours": true
+    }
+  },
+  {
+    "schema_version": "1.0",
+    "event_id": "evt-susp-004",
+    "timestamp": "2026-03-15T22:15:00Z",
+    "source_type": "squid",
+    "actor": "business-agent",
+    "user": "alice",
+    "device": "gb10",
+    "action": "http_upload",
+    "destination": "test-storage.local",
+    "request_bytes": 25000000,
+    "attributes": {
+      "method": "POST",
+      "uri": "https://test-storage.local/upload",
+      "status": 200,
+      "response_bytes": 842,
+      "mime": "application/octet-stream",
+      "result": "TCP_TUNNEL/200",
+      "outside_work_hours": true,
+      "asset_has_kev": false,
+      "new_destination": true
+    }
+  }
+]

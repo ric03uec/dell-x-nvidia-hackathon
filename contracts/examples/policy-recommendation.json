@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "recommendation_id": "rec-001",
+  "finding_id": "finding-001",
+  "action_type": "deny_destination",
+  "target": "test-storage.local",
+  "scope": "business-agent",
+  "reason": "Confirmed suspicious cross-action sequence",
+  "expires_at": "2026-03-16T22:15:00Z"
+}

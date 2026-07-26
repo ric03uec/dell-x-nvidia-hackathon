@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0",
+  "recommendation_id": "rec-001",
+  "status": "applied",
+  "enforcement_point": "openshell",
+  "policy_version": "policy-004"
+}

@@ -1,0 +1,2 @@
+[1773583200.000] [sandbox] [OCSF ] [ocsf] FILE:READ [INFO] ALLOWED /usr/bin/cat(4102) -> /workspace/project/README.md [policy:workspace-read engine:opa] [reason:allowed by filesystem_policy]
+[1773583530.000] [sandbox] [OCSF ] [ocsf] FILE:WRITE [INFO] ALLOWED /usr/bin/tee(4118) -> /workspace/project/notes.md [policy:workspace-write engine:opa] [reason:allowed by filesystem_policy]

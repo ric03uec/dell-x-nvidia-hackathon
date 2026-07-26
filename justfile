@@ -4,6 +4,7 @@
 set shell := ["bash", "-uc"]
 
 agents_dir := "agents"
+services_dir := "services"
 dashboard := "services/dashboard"
 lib := "libs/agentkit"
 template := "hello-agent"
@@ -27,6 +28,8 @@ check:
     uv run --project {{ lib }} ruff check {{ lib }}
     uv run --project {{ lib }} ruff format --check {{ lib }}
     uv run --project {{ lib }} mypy {{ lib }}/src
+    @just contracts-check
+    @just fixtures-check
     @just each check
     @just dashboard-check
 
@@ -63,6 +66,25 @@ dashboard-test:
 doctor host="":
     ./scripts/doctor.sh {{ host }}
 
+# Resolve a conflicted uv.lock by taking one side and regenerating it from
+# the (already-merged) pyproject.tomls — never hand-edit uv.lock.
+# Run after a merge/rebase leaves uv.lock conflicted: just relock [ours|theirs]
+[group('workspace')]
+relock side="ours":
+    git checkout --{{ side }} -- uv.lock
+    uv lock
+    git add uv.lock
+
+# Validate contracts/examples/* against their JSON Schemas (rejects unlisted policy action_type)
+[group('contracts')]
+contracts-check:
+    uv run --with jsonschema python3 contracts/validate.py
+
+# Validate fixtures/expected/* canonical events against contracts/event.schema.json
+[group('fixtures')]
+fixtures-check:
+    uv run --with jsonschema python3 fixtures/validate.py
+
 # Run a recipe inside one agent project: just a hello-agent test
 [group('agent')]
 a name +args="check":
@@ -83,6 +105,11 @@ each +args="check":
 [group('agent')]
 new name:
     ./scripts/new-agent.sh {{ agents_dir }}/{{ template }} {{ agents_dir }}/{{ name }}
+
+# Run a recipe inside one service project (the polyglot seam, e.g. pnpm): just s dashboard dev
+[group('service')]
+s name +args="check":
+    @just --justfile {{ services_dir }}/{{ name }}/justfile --working-directory {{ services_dir }}/{{ name }} {{ args }}
 
 # Deploy one agent to a Spark: just deploy hello-agent spark.local [--image]
 [group('deploy')]

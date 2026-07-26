@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
-# Copy the worked example into a new, self-contained agent project.
+# Copy the worked example into a new agent that's a member of the root uv
+# workspace (see /pyproject.toml [tool.uv.workspace]).
 #
 #   scripts/new-agent.sh agents/hello-agent agents/my-agent
 #
-# The new project gets no lockfile — `just a <name> setup` resolves its own.
-# The justfile derives the package name from the directory, so it needs no edit.
+# The new project gets no lockfile of its own — it resolves and locks into
+# the single root uv.lock, same as every other workspace member. Do not run
+# `uv lock` inside it; `just a <name> setup` (`uv sync`) picks it up via the
+# workspace. The justfile derives the package name from the directory, so it
+# needs no edit.
 set -euo pipefail
 
 src=${1:-}
