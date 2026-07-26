@@ -1,0 +1,28 @@
+# Workspace root — "virtual" (no [project] table): this pyproject.toml exists
+# only to declare the uv workspace and hold config shared by every member, not
+# to be an installable package itself.
+[tool.uv.workspace]
+members = ["libs/*", "services/*", "agents/*"]
+# Non-Python asset directories that happen to live under libs/* (policy docs,
+# shared markdown skills) — not uv projects, so exclude them explicitly.
+exclude = ["libs/policies", "libs/skills"]
+
+# Shared lint/type/test config for every workspace member. Kept here, not
+# per-member, so owners can't silently diverge on rules and cause
+# reformat-churn merge conflicts. Members should not redeclare these blocks.
+[tool.ruff]
+line-length = 100
+# Every member's package lives at <member>/src — point ruff there explicitly so
+# isort keeps recognizing each member's own package as first-party (it can no
+# longer infer this from a per-member pyproject.toml's own directory).
+src = ["agents/*/src", "libs/*/src", "services/*/src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
