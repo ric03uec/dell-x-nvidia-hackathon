@@ -12,9 +12,17 @@ Local-only processing for canonical event windows:
 
 ```bash
 just s processing setup
-just s processing train
+just s processing generate   # 800 train-normal + 400 labeled evaluation windows
+just s processing train      # Isolation Forest + PyTorch autoencoder + promotion gates
 just s processing demo
 ```
+
+Generation writes deterministic, synthetic-only windows to `synthetic-data/`.
+Ground truth is kept in a separate `expected.json`, so labels never leak into
+the model inputs. Training writes versioned artifacts and measured false/true
+positive rates to `artifacts/training-report.json`. Both directories are ignored
+because generated data and binary model artifacts are reproducible and should
+not be merged or hand-edited.
 
 Use local inference through the repository SSH tunnel:
 
@@ -37,6 +45,8 @@ recommendation to a running ingestion API. Live detection remains rules-only if
 the Isolation Forest artifact is absent or corrupt, and recommendation text
 falls back to deterministic evidence if local inference is unavailable.
 
-The offline trainer accepts only feature windows supplied by the caller. The
-integration layer must obtain those from ingestion's safe snapshot API; this
-service never opens the live SQLite database.
+For the hackathon, the bundle trainer uses generated windows derived from the
+frozen Squid/OpenShell fixtures, including mitmproxy-style sensitive field-name
+indicators. In production, the integration layer must replace that dataset with
+features obtained from ingestion's safe snapshot API. This service never opens
+the live SQLite database.

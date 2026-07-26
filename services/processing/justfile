@@ -15,12 +15,19 @@ test:
     uv run pytest
 
 [group('processing')]
-train model="artifacts/isolation-forest.pkl":
-    uv run squidward-process train-iforest \
-      --normal ../../fixtures/expected/normal.json --output {{ model }}
+generate data="synthetic-data":
+    uv run squidward-process generate-synthetic \
+      --normal-fixture ../../fixtures/expected/normal.json \
+      --suspicious-fixture ../../fixtures/expected/suspicious.json \
+      --output-dir {{ data }}
 
 [group('processing')]
-demo model="artifacts/isolation-forest.pkl":
+train data="synthetic-data" artifacts="artifacts": (generate data)
+    uv run --extra offline squidward-process train-bundle \
+      --dataset-dir {{ data }} --artifact-dir {{ artifacts }}
+
+[group('processing')]
+demo model="artifacts/registry/isolation-forest-001.pkl":
     uv run squidward-process detect \
       --events ../../fixtures/expected/suspicious.json \
       --baseline ../../fixtures/expected/normal.json --model {{ model }}

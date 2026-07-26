@@ -13,6 +13,8 @@ from processing.dataset import augmented_normal_windows, load_events
 from processing.inference import LocalLiteLLMInvestigator, MockInvestigator
 from processing.live import LiveScorer
 from processing.pipeline import detect_window, recommend_policy
+from processing.synthetic import generate_dataset
+from processing.training import train_bundle
 
 
 def _known_destinations(events: list[dict[str, object]]) -> set[str]:
@@ -68,6 +70,29 @@ def _detect(args: argparse.Namespace) -> None:
     print(json.dumps(output, indent=2, sort_keys=True))
 
 
+def _generate_synthetic(args: argparse.Namespace) -> None:
+    manifest = generate_dataset(
+        args.normal_fixture,
+        args.suspicious_fixture,
+        args.output_dir,
+        train_normal=args.train_normal,
+        eval_normal=args.eval_normal,
+        eval_suspicious=args.eval_suspicious,
+        seed=args.seed,
+    )
+    print(json.dumps(manifest, indent=2, sort_keys=True))
+
+
+def _train_bundle(args: argparse.Namespace) -> None:
+    report = train_bundle(
+        args.dataset_dir,
+        args.artifact_dir,
+        seed=args.seed,
+        autoencoder_epochs=args.autoencoder_epochs,
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
+
+
 def _live(args: argparse.Namespace) -> None:
     baseline = load_events(args.baseline) if args.baseline else []
     scorer = LiveScorer(
@@ -83,6 +108,27 @@ def _live(args: argparse.Namespace) -> None:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+
+    generate = commands.add_parser(
+        "generate-synthetic", help="Generate deterministic labeled event windows."
+    )
+    generate.add_argument("--normal-fixture", type=Path, required=True)
+    generate.add_argument("--suspicious-fixture", type=Path, required=True)
+    generate.add_argument("--output-dir", type=Path, required=True)
+    generate.add_argument("--train-normal", type=int, default=800)
+    generate.add_argument("--eval-normal", type=int, default=200)
+    generate.add_argument("--eval-suspicious", type=int, default=200)
+    generate.add_argument("--seed", type=int, default=42)
+    generate.set_defaults(handler=_generate_synthetic)
+
+    bundle = commands.add_parser(
+        "train-bundle", help="Train, evaluate, and promote both anomaly models."
+    )
+    bundle.add_argument("--dataset-dir", type=Path, required=True)
+    bundle.add_argument("--artifact-dir", type=Path, required=True)
+    bundle.add_argument("--seed", type=int, default=42)
+    bundle.add_argument("--autoencoder-epochs", type=int, default=150)
+    bundle.set_defaults(handler=_train_bundle)
 
     train = commands.add_parser("train-iforest", help="Train the live CPU anomaly model.")
     train.add_argument("--normal", type=Path, required=True)
