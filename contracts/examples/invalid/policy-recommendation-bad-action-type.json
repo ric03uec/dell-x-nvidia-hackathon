@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "recommendation_id": "rec-002",
+  "finding_id": "finding-001",
+  "action_type": "run_shell_command",
+  "target": "test-storage.local",
+  "scope": "business-agent",
+  "reason": "A generative model must never be able to author this action_type; it is not in the closed enum and validate.py asserts this fixture is rejected.",
+  "expires_at": "2026-03-16T22:15:00Z"
+}

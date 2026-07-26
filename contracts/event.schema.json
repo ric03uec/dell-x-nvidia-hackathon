@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dell-x-nvidia-hackathon.local/contracts/event.schema.json",
+  "title": "Canonical Event",
+  "description": "A normalized action/audit event produced by a source adapter (Squid, OpenShell, and future sources such as Zeek or endpoint telemetry) and submitted to POST /v1/events. See docs/modular-implementation-plan.md section 3.1.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "timestamp",
+    "source_type",
+    "actor",
+    "action"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Contract version this payload was produced against."
+    },
+    "event_id": {
+      "type": "string",
+      "description": "Stable, unique identifier for this event."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp (integration rule 3)."
+    },
+    "source_type": {
+      "type": "string",
+      "description": "Adapter that produced this event, e.g. squid, openshell."
+    },
+    "actor": {
+      "type": "string",
+      "description": "Agent or process that performed the action."
+    },
+    "user": {
+      "type": "string"
+    },
+    "device": {
+      "type": "string"
+    },
+    "action": {
+      "type": "string"
+    },
+    "destination": {
+      "type": "string"
+    },
+    "request_bytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "attributes": {
+      "type": "object",
+      "description": "Free-form source-specific metadata."
+    }
+  },
+  "additionalProperties": true
+}
