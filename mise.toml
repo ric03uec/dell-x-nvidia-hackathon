@@ -3,7 +3,6 @@
 # checks them over ssh.
 [tools]
 just = "1.54"
-pnpm = "11.17"
 uv = "0.11"
 # services/dashboard: pnpm/TypeScript polyglot seam (not a uv workspace
 # member — see services/dashboard/README.md).
