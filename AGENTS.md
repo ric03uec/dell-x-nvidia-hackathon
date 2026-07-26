@@ -5,25 +5,33 @@ Pi editor configuration for this repository.
 ## Project Shape
 
 This is a monorepo scaffold for NemoClaw agent projects with OpenShell sandbox
-policies. Each agent is isolated under `agents/<name>/` and owns its own
-dependencies, lockfile, manifest, policy, and tests.
+policies. Each agent or service is isolated under its own component directory
+(`agents/<name>/` or `services/<name>/`) and owns its own manifest, policy,
+and tests, sharing one workspace-wide `uv.lock`.
 
 ## Core Rule
 
-A worktree building agent `X` touches only `agents/X/**`.
+One owner per top-level component directory. A worktree building agent `X`
+touches only its own component directory: `agents/business-agent`,
+`agents/security-agent`, `agents/hello-agent` under `agents/`, and
+`services/ingestion`, `services/processing`, `services/dashboard` under
+`services/`.
 
-Do not modify shared files such as `libs/`, `docs/`, root config, or the root
-`justfile` while implementing a specific agent unless the user explicitly asks
-for a shared change.
+`contracts/` and the root `uv.lock` (plus root `pyproject.toml` and the root
+`justfile`) are jointly-owned, review-gated shared surfaces — see
+`CODEOWNERS`. Do not modify them while implementing a specific component
+unless the user explicitly asks for a shared change. If `uv.lock` conflicts,
+see CLAUDE.md's "uv.lock conflicts" section — regenerate it with `just
+relock`, never hand-merge it.
 
 ## Commands
 
 Use the repo recipes when available:
 
 ```bash
-just a <name> check
-just a <name> test
-just each check
+just a <name> check     # one agent
+just s <name> check     # one service
+just each check         # everything, across agents/ and services/
 ```
 
 If `just` is not installed, run the equivalent commands inside the target
