@@ -1,6 +1,10 @@
 # services/dashboard — pnpm/TypeScript, deliberately outside the uv workspace
-# (the polyglot seam; see README.md). Driven via the root justfile's
-# `just s dashboard <verb>`, mirroring `just a <name> <verb>` for agents.
+# (the polyglot seam; see the exclude list in the root pyproject.toml). Driven
+# via the root justfile's `just s dashboard <verb>`, mirroring `just a <name>
+# <verb>` for agents.
+#
+# These recipes wrap the app's own package.json scripts rather than replacing
+# them, so the app keeps its native `pnpm run …` workflow untouched.
 
 set shell := ["bash", "-uc"]
 
@@ -14,15 +18,18 @@ default:
 setup:
     pnpm install
 
-# Start the dev server (port from $DASHBOARD_PORT / docs/ports.md, default 8300)
+# Start the dev server on the port assigned in docs/ports.md.
+# Passed on the command line because vite.config.ts pins host but not port.
 [group('project')]
-dev:
-    pnpm run dev
+dev port=env("DASHBOARD_PORT", "8300"):
+    pnpm run dev -- --port {{ port }}
 
-# Typecheck and lint
+# Typecheck and lint. Composed from the app's two scripts — it has no single
+# `check` script of its own.
 [group('project')]
 check:
-    pnpm run check
+    pnpm run typecheck
+    pnpm run lint
 
 # Production build
 [group('project')]
