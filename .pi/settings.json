@@ -1,0 +1,10 @@
+{
+  "packages": [
+    "extensions/vllm-hack.ts"
+  ],
+  "defaultProvider": "vllm-hack",
+  "defaultModel": "Qwen3.6-27B-FP8",
+  "enabledModels": [
+    "vllm-hack/Qwen3.6-27B-FP8"
+  ]
+}
