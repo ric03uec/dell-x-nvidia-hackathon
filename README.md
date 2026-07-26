@@ -14,8 +14,8 @@ just each setup           # sync every project's venv
 just each check           # lint + format + typecheck everywhere
 just each test             # tests everywhere
 just a hello-agent run     # run one agent's service locally
-just dashboard-setup       # install the SquidWard dashboard dependencies
-just dashboard-dev         # run the dashboard locally
+just s dashboard setup     # install the SquidWard dashboard dependencies
+just s dashboard dev       # run the dashboard locally
 ```
 
 ## Add an agent

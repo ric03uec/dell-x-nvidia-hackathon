@@ -35,3 +35,8 @@ check:
 [group('project')]
 build:
     pnpm run build
+
+# Build as the current test gate (the app has no dedicated test runner yet)
+[group('project')]
+test:
+    pnpm run test
