@@ -49,16 +49,19 @@ flowchart LR
         SMALL --> SCORE
         SCORE --> DB
         SCORE --> UI[Streamlit Dashboard]
-        SCORE -.-> LLM[Local LLM Explanation] --> UI
+        SCORE -.-> LITELLM[Local LiteLLM Gateway]
+        LITELLM -->|Live model alias| LLM[Fast Local Explanation Model] --> UI
 
         subgraph Offline[Offline / Nightly - GPU]
             SNAPSHOT[Historical Snapshot]
-            LARGE[Powerful Offline Model]
+            SEQUENCE[PyTorch Sequence / Autoencoder Model]
+            POWERFUL[Powerful Local Model via LiteLLM]
             EVAL[Replay + Evaluate]
             APPROVE{Analyst Approval}
         end
 
-        DB -->|Nightly| SNAPSHOT --> LARGE --> EVAL --> APPROVE
+        DB -->|Nightly| SNAPSHOT --> SEQUENCE --> LITELLM
+        LITELLM -->|Offline model alias| POWERFUL --> EVAL --> APPROVE
         APPROVE -->|Thresholds / new small model| SMALL
         APPROVE -->|Deeper incidents| UI
         UI -->|Labels| DB
@@ -96,7 +99,7 @@ Use one Docker Compose deployment with six services:
 | Worker/collector | Python | Tails logs, normalizes events, scans, scores, and runs nightly jobs |
 | Database | PostgreSQL | Events, baselines, assets, CVEs, labels, and model versions |
 | Dashboard | Streamlit | Alerts, explanations, labels, policy, and model approval |
-| Model service | PyTorch plus Ollama/llama.cpp | Powerful offline model and local LLM |
+| Model service | PyTorch plus local LiteLLM gateway/backends | Offline anomaly model, fast explanation model, and powerful offline model |
 
 PostgreSQL can also hold MVP jobs. Do not add Kafka, Kubernetes, a separate feature store, or production endpoint agents during the hackathon.
 
@@ -238,9 +241,14 @@ The helper may check only cached, deterministic policy such as a denied destinat
 
 ## 8. Powerful offline model on the GB10
 
-Each night, the GB10 runs a more powerful model over the local Squid history. For the hackathon, use a **PyTorch autoencoder** over time-window features. A temporal transformer can be an eventual enhancement.
+Each night, the GB10 runs a two-stage offline analysis over the local Squid history:
 
-The offline model can analyze:
+1. A **PyTorch autoencoder** processes numerical time-window and sequence features.
+2. A **powerful local model accessed through LiteLLM** correlates the structured findings, CVE context, and analyst labels.
+
+A temporal anomaly model can replace or extend the autoencoder after the MVP. LiteLLM provides the OpenAI-compatible gateway; all configured inference backends remain on the GB10.
+
+The offline pipeline can analyze:
 
 - A user's previous 20–100 proxy events
 - 1-hour, 24-hour, and 7-day behavior
@@ -256,7 +264,7 @@ It produces:
 - Recommended live thresholds
 - Teacher-generated labels or a candidate small model
 
-The offline model also supports on-demand investigation. It is powerful but does not need to meet Squid request latency.
+The offline models also support on-demand investigation. They are powerful but do not need to meet Squid request latency. The PyTorch model handles numerical anomaly detection; the powerful model behind LiteLLM handles correlation and structured reasoning.
 
 ### Safe learning loop
 
@@ -266,8 +274,9 @@ flowchart LR
     LIVE --> STORE[(Local History)]
     LIVE --> REVIEW[Analyst Review]
     REVIEW -->|Labels| STORE
-    STORE -->|Nightly snapshot| GPU[Powerful GPU Model]
-    GPU --> TEST[Replay + Evaluate]
+    STORE -->|Nightly snapshot| GPU[PyTorch Sequence Model]
+    GPU --> LITELLM[LiteLLM to Powerful Local Model]
+    LITELLM --> TEST[Replay + Evaluate]
     TEST --> GATE{Better and Safe?}
     GATE -->|Approve| VERSION[Versioned Candidate]
     VERSION --> DEPLOY[Update Small Model / Thresholds]
@@ -276,16 +285,33 @@ flowchart LR
 
 Do not train on unresolved high-risk events as if they were normal. Every promoted model is versioned and supports rollback.
 
-## 9. Local LLM
+## 9. Local LiteLLM model gateway
 
-The local LLM receives structured evidence after scoring and:
+LiteLLM is the single OpenAI-compatible gateway for models hosted locally on the GB10. Configure at least two aliases:
+
+```text
+exfil-live     -> fast local model for asynchronous explanations
+exfil-offline  -> powerful local model for nightly correlation and investigation
+```
+
+Application configuration can use:
+
+```text
+LITELLM_BASE_URL=http://litellm:4000/v1
+LIVE_MODEL=exfil-live
+OFFLINE_MODEL=exfil-offline
+```
+
+The live alias receives structured evidence after scoring and:
 
 - Explains why a Squid event was flagged.
 - Summarizes a user's related proxy activity.
 - Adds relevant CVE/KEV context.
 - Suggests investigation steps.
 
-It recommends actions but cannot modify Squid policy directly. Squid logs, URLs, CVE text, and report content are untrusted data, not LLM instructions.
+The offline alias receives larger, historical batches of structured findings and performs deeper correlation. Neither model modifies Squid policy directly.
+
+LiteLLM must listen only on the private container network, require an internal API key, and have no external-provider fallback. Prompts and responses remain local. Squid logs, URLs, CVE text, and report content are untrusted data, not model instructions.
 
 ## 10. Hackathon demo
 
@@ -307,16 +333,17 @@ It recommends actions but cannot modify Squid policy directly. Squid logs, URLs,
 1. Install Docker, Docker Compose, the NVIDIA driver, and NVIDIA Container Toolkit.
 2. Verify GPU access with `nvidia-smi`.
 3. Check `uname -m`; use `linux/arm64` images if the Grace-based host requires them.
-4. Download models once and store them locally.
-5. Start Squid, FastAPI, PostgreSQL, the worker, Streamlit, and the model service.
-6. Bind-mount the Squid log directory read-only into the worker.
-7. Load the CVE/KEV snapshot and configure one authorized scan range.
-8. Expose port 3128 only to test clients and restrict the dashboard to the internal management network.
+4. Download models once and store them locally on the GB10.
+5. Configure LiteLLM with local-only `exfil-live` and `exfil-offline` model aliases; do not configure external-provider fallbacks.
+6. Start Squid, FastAPI, PostgreSQL, the worker, Streamlit, LiteLLM, and the local inference backends.
+7. Bind-mount the Squid log directory read-only into the worker.
+8. Load the CVE/KEV snapshot and configure one authorized scan range.
+9. Expose port 3128 only to test clients, restrict the dashboard to the management network, and keep LiteLLM private to the container network.
 
 Suggested resource allocation:
 
 - CPU: Squid, API, PostgreSQL, collector, rules, and small live model
-- GPU: powerful offline model and local LLM
+- GPU: PyTorch offline model and the local models routed through LiteLLM
 - Disk: Squid history, normalized events, CVEs, labels, models, and audit history
 
 A connected installation can refresh CVE data through an allowlisted outbound-only updater that sends no customer data. An air-gapped installation imports a signed update bundle.
@@ -347,7 +374,8 @@ A connected installation can refresh CVE data through an allowlisted outbound-on
 ### Member 4 — Dashboard, LLM, and GB10 deployment
 
 - Streamlit alerts and analyst labels
-- Local LLM explanations
+- LiteLLM integration and local model aliases
+- Local model explanations
 - Policy and model approval screens
 - Docker Compose and GB10 GPU setup
 
@@ -377,7 +405,8 @@ flowchart LR
     subgraph Offline[GB10 Offline Intelligence]
         HISTORY[(Encrypted History)]
         LARGE[Powerful Temporal / Graph Model]
-        LLM[Local LLM Investigation]
+        GATEWAY[Local LiteLLM Gateway]
+        LLM[Powerful Local Investigation Model]
         REGISTRY[Signed Model Registry]
     end
 
@@ -393,7 +422,7 @@ flowchart LR
     MODEL --> RESPONSE
     RESPONSE --> SQUID
     PIPE --> HISTORY
-    HISTORY --> LARGE --> LLM
+    HISTORY --> LARGE --> GATEWAY --> LLM
     LARGE --> REGISTRY --> MODEL
 ```
 
