@@ -6,7 +6,7 @@ set shell := ["bash", "-uc"]
 agents_dir := "agents"
 lib := "libs/agentkit"
 template := "hello-agent"
-gb10 := "dell-gb10"
+gb10 := "hack"
 
 # List available recipes
 [group('workspace')]
@@ -67,7 +67,7 @@ deploy name host +flags="--source":
 # Push infra/gb10 config to the box. Never ships secrets or model weights.
 [group('gb10')]
 gb10-push:
-    ./infra/gb10/provision.sh config
+    HOST={{ gb10 }} ./infra/gb10/provision.sh config
 
 # Restart vLLM and LiteLLM together on a profile: qwen36 | qwen-next-thinking
 [group('gb10')]
@@ -75,11 +75,25 @@ gb10-restart profile="qwen36":
     ssh {{ gb10 }} 'bin/hack-vllm-large-qwen start {{ profile }}'
     ssh {{ gb10 }} 'bin/hack-litellm-large-qwen start {{ profile }}'
 
-# Show what's running and what each endpoint actually serves
+# Install, configure, start, and verify OpenClaw on the GB10
+[group('gb10')]
+gb10-up +flags="":
+    ANSIBLE_CONFIG=infra/gb10/ansible/ansible.cfg ansible-playbook -i infra/gb10/ansible/inventory.yml infra/gb10/ansible/site.yml {{ flags }}
+
+# Check inference and OpenClaw gateway health
 [group('gb10')]
 gb10-status:
-    @ssh {{ gb10 }} 'bin/hack-vllm-large-qwen status'
-    @printf '\nvLLM :8000 serves: '
-    @ssh {{ gb10 }} 'bin/hack-vllm-large-qwen models' | jq -r '.data[].id'
-    @printf 'LiteLLM :4000 serves: '
-    @ssh {{ gb10 }} 'bin/hack-litellm-large-qwen models' | jq -r '.data[].id'
+    @ANSIBLE_CONFIG=infra/gb10/ansible/ansible.cfg ansible-playbook -i infra/gb10/ansible/inventory.yml infra/gb10/ansible/status.yml
+
+# Recover inference and the OpenClaw gateway after reboot
+[group('gb10')]
+gb10-recover +flags="":
+    ANSIBLE_CONFIG=infra/gb10/ansible/ansible.cfg ansible-playbook -i infra/gb10/ansible/inventory.yml infra/gb10/ansible/recover.yml {{ flags }}
+
+# Validate the GB10 Ansible and checked-in OpenClaw configuration
+[group('gb10')]
+gb10-check:
+    ANSIBLE_CONFIG=infra/gb10/ansible/ansible.cfg ansible-playbook -i infra/gb10/ansible/inventory.yml infra/gb10/ansible/site.yml --syntax-check
+    ANSIBLE_CONFIG=infra/gb10/ansible/ansible.cfg ansible-playbook -i infra/gb10/ansible/inventory.yml infra/gb10/ansible/recover.yml --syntax-check
+    ANSIBLE_CONFIG=infra/gb10/ansible/ansible.cfg ansible-playbook -i infra/gb10/ansible/inventory.yml infra/gb10/ansible/status.yml --syntax-check
+    jq --exit-status 'type == "object" and all(keys[]; length > 0)' infra/openclaw/settings/openclaw.json >/dev/null

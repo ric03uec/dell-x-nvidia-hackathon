@@ -1,0 +1,12 @@
+---
+- name: Check GB10 OpenClaw health
+  hosts: gb10
+  gather_facts: true
+  tasks:
+    - name: Validate shared deployment prerequisites
+      ansible.builtin.include_tasks: tasks/prerequisites.yml
+
+    - name: Run full-stack health checks
+      ansible.builtin.include_tasks: tasks/verify.yml
+      vars:
+        openclaw_live_prompt: false

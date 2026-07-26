@@ -1,0 +1,175 @@
+---
+- name: Deploy OpenClaw on the GB10
+  hosts: gb10
+  gather_facts: true
+  vars:
+    openclaw_source_dir: "{{ playbook_dir }}/../../openclaw"
+  tasks:
+    - name: Validate deployment inputs
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.system == 'Linux'
+          - ansible_facts.architecture in ['aarch64', 'arm64']
+          - ansible_facts.distribution == 'Ubuntu'
+          - openclaw_gateway_bind == 'lan'
+          - openclaw_gateway_port | int >= 1024
+          - openclaw_gateway_port | int <= 65535
+
+    - name: Validate shared deployment prerequisites
+      ansible.builtin.include_tasks: tasks/prerequisites.yml
+
+    - name: Ensure the existing inference stack is ready
+      ansible.builtin.include_tasks: tasks/inference.yml
+
+    - name: Create OpenClaw installation directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "{{ openclaw_install_root }}", mode: "0755" }
+        - { path: "{{ openclaw_cache_dir }}", mode: "0700" }
+        - { path: "{{ openclaw_state_dir }}", mode: "0700" }
+        - { path: "{{ openclaw_workspace_dir }}", mode: "0700" }
+        - { path: "{{ ansible_facts.env.HOME }}/.config/systemd/user", mode: "0700" }
+
+    - name: Download pinned Node.js runtime
+      ansible.builtin.get_url:
+        url: "https://nodejs.org/dist/v{{ openclaw_node_version }}/node-v{{ openclaw_node_version }}-linux-arm64.tar.xz"
+        dest: "{{ openclaw_node_archive }}"
+        checksum: "sha256:{{ openclaw_node_archive_sha256 }}"
+        mode: "0600"
+
+    - name: Install pinned Node.js runtime
+      ansible.builtin.unarchive:
+        src: "{{ openclaw_node_archive }}"
+        dest: "{{ openclaw_install_root }}"
+        remote_src: true
+        extra_opts: [--strip-components=1]
+        creates: "{{ openclaw_install_root }}/bin/node"
+
+    - name: Read installed OpenClaw version
+      ansible.builtin.command:
+        argv: ["{{ openclaw_install_root }}/bin/openclaw", --version]
+      environment:
+        PATH: "{{ openclaw_install_root }}/bin:{{ ansible_facts.env.PATH }}"
+      register: openclaw_version_before
+      failed_when: false
+      changed_when: false
+
+    - name: Install pinned OpenClaw package
+      ansible.builtin.command:
+        argv:
+          - "{{ openclaw_install_root }}/bin/npm"
+          - install
+          - --global
+          - --prefix
+          - "{{ openclaw_install_root }}"
+          - "openclaw@{{ openclaw_version }}"
+      environment:
+        PATH: "{{ openclaw_install_root }}/bin:{{ ansible_facts.env.PATH }}"
+      when: openclaw_version not in openclaw_version_before.stdout
+      changed_when: true
+
+    - name: Install OpenClaw user command
+      ansible.builtin.copy:
+        dest: "{{ ansible_facts.env.HOME }}/.local/bin/openclaw"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          export PATH={{ openclaw_install_root }}/bin:"${PATH}"
+          exec {{ openclaw_install_root }}/bin/openclaw "$@"
+
+    - name: Deploy OpenClaw configuration
+      ansible.builtin.copy:
+        src: "{{ openclaw_source_dir }}/settings/openclaw.json"
+        dest: "{{ openclaw_state_dir }}/openclaw.json"
+        mode: "0600"
+      notify: Restart OpenClaw gateway
+
+    - name: Deploy checked-in OpenClaw workspace
+      ansible.builtin.copy:
+        src: "{{ openclaw_source_dir }}/workspace/"
+        dest: "{{ openclaw_workspace_dir }}/"
+        mode: preserve
+      notify: Restart OpenClaw gateway
+
+    - name: Create the OpenClaw runtime secrets file
+      ansible.builtin.shell: |
+        set -euo pipefail
+        if [[ -f {{ openclaw_runtime_env_file | quote }} ]]; then
+          source {{ openclaw_runtime_env_file | quote }}
+        fi
+        gateway_token="${OPENCLAW_GATEWAY_TOKEN:-$(openssl rand -hex 32)}"
+        source {{ litellm_env_file | quote }}
+        umask 077
+        printf 'LITELLM_API_KEY=%q\nOPENCLAW_GATEWAY_TOKEN=%q\n' \
+          "${LITELLM_MASTER_KEY}" "${gateway_token}" > {{ openclaw_runtime_env_file | quote }}
+      args:
+        executable: /bin/bash
+      no_log: true
+      changed_when: false
+
+    - name: Install the OpenClaw user service
+      ansible.builtin.copy:
+        dest: "{{ ansible_facts.env.HOME }}/.config/systemd/user/openclaw-gateway.service"
+        mode: "0600"
+        content: |
+          [Unit]
+          Description=OpenClaw Gateway
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          Environment=HOME={{ ansible_facts.env.HOME }}
+          Environment=PATH={{ openclaw_install_root }}/bin:/usr/local/bin:/usr/bin:/bin
+          EnvironmentFile={{ openclaw_runtime_env_file }}
+          ExecStart={{ openclaw_install_root }}/bin/openclaw gateway --port {{ openclaw_gateway_port }}
+          Restart=on-failure
+          RestartSec=5
+
+          [Install]
+          WantedBy=default.target
+      notify:
+        - Reload user systemd
+        - Restart OpenClaw gateway
+
+    - name: Apply pending service changes
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable and start OpenClaw
+      ansible.builtin.systemd_service:
+        name: openclaw-gateway.service
+        scope: user
+        enabled: true
+        state: started
+
+    - name: Remove NemoClaw user state and executable
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ ansible_facts.env.HOME }}/.nemoclaw"
+        - "{{ ansible_facts.env.HOME }}/.config/nemoclaw"
+        - "{{ ansible_facts.env.HOME }}/.local/share/nemoclaw"
+        - "{{ ansible_facts.env.HOME }}/.local/share/hack-openclaw"
+        - "{{ ansible_facts.env.HOME }}/.local/state/nemoclaw"
+        - "{{ ansible_facts.env.HOME }}/.local/bin/nemoclaw"
+
+    - name: Verify the complete deployed stack
+      ansible.builtin.include_tasks: tasks/verify.yml
+      vars:
+        openclaw_live_prompt: true
+
+  handlers:
+    - name: Reload user systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+        scope: user
+
+    - name: Restart OpenClaw gateway
+      ansible.builtin.systemd_service:
+        name: openclaw-gateway.service
+        scope: user
+        state: restarted
