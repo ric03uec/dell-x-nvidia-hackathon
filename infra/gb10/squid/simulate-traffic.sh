@@ -39,4 +39,4 @@ done
 
 echo
 echo "done. Capture these into a fixture with:"
-echo "  docker exec hack-squid cat /var/log/squid/access.log | ./log2jsonl.py"
+echo "  just s collector replay <(docker exec hack-squid cat /var/log/squid/access.log)"

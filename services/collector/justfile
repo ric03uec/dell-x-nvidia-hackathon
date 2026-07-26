@@ -1,0 +1,30 @@
+# services/collector — Squid access.log -> ingestion.
+# Root verbs: just s collector check | just s collector test | just s collector run
+
+set shell := ["bash", "-uc"]
+
+# List available recipes
+default:
+    @just --list
+
+# Sync this member's dependencies
+setup:
+    uv sync --project .
+
+# Lint, format-check and typecheck
+check:
+    uv run --project . ruff check src tests
+    uv run --project . ruff format --check src tests
+    uv run --project . mypy src
+
+# Run the tests — fixture-driven, needs neither Squid nor ingestion
+test:
+    uv run --project . pytest tests -q
+
+# Follow the live Squid log and post to ingestion
+run ingestion="http://127.0.0.1:8100":
+    uv run --project . collector --ingestion-url {{ ingestion }}
+
+# Parse a log file to jsonl on stdout — how fixtures/squid/*.jsonl is made
+replay file:
+    uv run --project . collector --replay {{ file }}
