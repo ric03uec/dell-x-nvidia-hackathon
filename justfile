@@ -5,7 +5,6 @@ set shell := ["bash", "-uc"]
 
 agents_dir := "agents"
 services_dir := "services"
-dashboard := "services/dashboard"
 lib := "libs/agentkit"
 template := "hello-agent"
 gb10 := "dell-gb10"
@@ -15,14 +14,13 @@ gb10 := "dell-gb10"
 default:
     @just --list
 
-# Sync the shared library venv and every agent project
+# Sync the shared library venv and every agent/service project
 [group('workspace')]
 setup:
     uv sync --project {{ lib }}
     @just each setup
-    pnpm --dir {{ dashboard }} install --frozen-lockfile
 
-# Lint, format-check, and typecheck the shared libs and every agent
+# Lint, format-check, and typecheck the shared libs and every agent/service
 [group('workspace')]
 check:
     uv run --project {{ lib }} ruff check {{ lib }}
@@ -31,35 +29,12 @@ check:
     @just contracts-check
     @just fixtures-check
     @just each check
-    @just dashboard-check
 
-# Run the shared library tests and every agent's tests
+# Run the shared library tests and every agent/service's tests
 [group('workspace')]
 test:
     uv run --project {{ lib }} pytest {{ lib }}
     @just each test
-    @just dashboard-test
-
-# Start the SquidWard dashboard locally
-[group('dashboard')]
-dashboard-dev:
-    pnpm --dir {{ dashboard }} dev
-
-# Install the dashboard's pinned dependencies
-[group('dashboard')]
-dashboard-setup:
-    pnpm --dir {{ dashboard }} install --frozen-lockfile
-
-# Lint and typecheck the dashboard
-[group('dashboard')]
-dashboard-check:
-    pnpm --dir {{ dashboard }} lint
-    pnpm --dir {{ dashboard }} typecheck
-
-# Build the dashboard as its current test gate
-[group('dashboard')]
-dashboard-test:
-    pnpm --dir {{ dashboard }} test
 
 # Check the local toolchain, and a DGX Spark host if one is given
 [group('workspace')]
@@ -90,12 +65,12 @@ fixtures-check:
 a name +args="check":
     @just --justfile {{ agents_dir }}/{{ name }}/justfile --working-directory {{ agents_dir }}/{{ name }} {{ args }}
 
-# Run a recipe inside every agent project: just each test
-[group('agent')]
+# Run a recipe inside every agent and service project: just each test
+[group('workspace')]
 each +args="check":
     #!/usr/bin/env bash
     set -euo pipefail
-    for d in {{ agents_dir }}/*/; do
+    for d in {{ agents_dir }}/*/ {{ services_dir }}/*/; do
       [[ -f "$d/justfile" ]] || continue
       printf '\n==> %s\n' "${d%/}"
       just --justfile "$d/justfile" --working-directory "$d" {{ args }}
