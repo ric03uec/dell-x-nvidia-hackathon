@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "finding_id": "finding-001",
+  "event_ids": ["evt-001", "evt-002", "evt-003"],
+  "risk_score": 91,
+  "severity": "high",
+  "detectors": ["new_destination", "sequence_anomaly"],
+  "summary": "Repeated staging followed by a large upload to a new destination.",
+  "model_version": "offline-001"
+}

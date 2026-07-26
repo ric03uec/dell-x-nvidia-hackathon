@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dell-x-nvidia-hackathon.local/contracts/enforcement-result.schema.json",
+  "title": "Enforcement Result",
+  "description": "The outcome of applying an approved policy recommendation at an enforcement point, recorded via POST /v1/enforcement-results (integration rule 7: every enforcement action emits an audit event back into ingestion). See docs/modular-implementation-plan.md section 3.4.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "recommendation_id",
+    "status",
+    "enforcement_point"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "recommendation_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["applied", "failed"]
+    },
+    "enforcement_point": {
+      "type": "string"
+    },
+    "policy_version": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

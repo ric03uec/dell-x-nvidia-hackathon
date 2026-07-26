@@ -25,6 +25,7 @@ check:
     uv run --project {{ lib }} ruff check {{ lib }}
     uv run --project {{ lib }} ruff format --check {{ lib }}
     uv run --project {{ lib }} mypy {{ lib }}/src
+    @just contracts-check
     @just each check
 
 # Run the shared library tests and every agent's tests
@@ -37,6 +38,11 @@ test:
 [group('workspace')]
 doctor host="":
     ./scripts/doctor.sh {{ host }}
+
+# Validate contracts/examples/* against their JSON Schemas (rejects unlisted policy action_type)
+[group('contracts')]
+contracts-check:
+    uv run --with jsonschema python3 contracts/validate.py
 
 # Run a recipe inside one agent project: just a hello-agent test
 [group('agent')]

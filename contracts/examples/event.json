@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "event_id": "evt-001",
+  "timestamp": "2026-03-15T22:15:00Z",
+  "source_type": "squid",
+  "actor": "business-agent",
+  "user": "alice",
+  "device": "gb10",
+  "action": "http_upload",
+  "destination": "test-storage.local",
+  "request_bytes": 25000000,
+  "attributes": {
+    "method": "POST",
+    "outside_work_hours": true,
+    "asset_has_kev": false
+  }
+}
