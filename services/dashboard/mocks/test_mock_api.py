@@ -109,6 +109,59 @@ class MockApiTests(unittest.TestCase):
         status, enforcement = api.get("/v1/enforcement-results")
         self.assertEqual((status, enforcement["enforcement_results"]), (200, []))
 
+    def test_pipeline_mode_accepts_events_findings_and_recommendations(self) -> None:
+        api = MockApi(pipeline_mode=True)
+        event = {
+            "schema_version": "1.0",
+            "event_id": "evt-pipeline-001",
+            "timestamp": "2026-07-26T14:00:00Z",
+            "source_type": "mitmproxy",
+            "actor": "business-agent",
+            "action": "http_post",
+            "destination": "receiver.demo.local",
+            "request_bytes": 25_000_000,
+            "attributes": {},
+        }
+        finding = {
+            "schema_version": "1.0",
+            "finding_id": "finding-pipeline-001",
+            "event_ids": [event["event_id"]],
+            "risk_score": 95,
+            "severity": "critical",
+            "detectors": ["large_transfer"],
+            "summary": "Synthetic suspicious transfer.",
+            "evidence": [
+                {
+                    "detector": "large_transfer",
+                    "points": 25,
+                    "description": "Large outbound transfer.",
+                }
+            ],
+        }
+        recommendation = {
+            "schema_version": "1.0",
+            "recommendation_id": "rec-pipeline-001",
+            "finding_id": finding["finding_id"],
+            "action_type": "deny_destination",
+            "target": "receiver.demo.local",
+            "scope": "business-agent",
+            "reason": "Synthetic evidence exceeded the threshold.",
+            "expires_at": "2026-07-27T14:00:00Z",
+        }
+
+        self.assertEqual(api.ingest_event(event)[0], 201)
+        self.assertEqual(api.ingest_event(event)[0], 201)
+        self.assertEqual(api.store_finding(finding)[0], 201)
+        self.assertEqual(api.store_recommendation(recommendation)[0], 201)
+
+        _, events = api.get("/v1/events")
+        self.assertEqual(events["count"], 1)
+        self.assertEqual(events["events"][0]["finding_id"], finding["finding_id"])
+        _, findings = api.get(f"/v1/findings/{finding['finding_id']}")
+        self.assertEqual(findings["finding"]["timeline"][0]["event_id"], event["event_id"])
+        _, recommendations = api.get("/v1/recommendations")
+        self.assertEqual(recommendations["recommendations"][0]["target"], "receiver.demo.local")
+
     def test_invalid_decisions_return_json_errors(self) -> None:
         api = MockApi()
         status, response = api.decide({"schema_version": "2.0", "decision": "approved"})

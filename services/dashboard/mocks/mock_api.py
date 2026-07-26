@@ -207,15 +207,27 @@ class MockApi:
         self,
         inference_client: LiteLLMClient | None = None,
         gpu_collector: GpuTelemetryCollector | None = None,
+        pipeline_mode: bool = False,
     ) -> None:
         self._decision: dict[str, Any] | None = None
         self._inference_client = inference_client
         self._gpu_collector = gpu_collector
         self._investigation: dict[str, Any] | None = None
+        self._pipeline_mode = pipeline_mode
+        self._events: list[dict[str, Any]] = [] if pipeline_mode else list(SOURCE_EVENTS)
+        self._findings: dict[str, dict[str, Any]] = {}
+        self._recommendations: dict[str, dict[str, Any]] = {}
         self._lock = Lock()
 
     def _recommendation(self) -> dict[str, Any]:
         status = self._decision["decision"] if self._decision else "pending"
+        if self._recommendations:
+            stored = dict(next(iter(self._recommendations.values())))
+            stored["status"] = status
+            stored.setdefault("created_at", GENERATED_AT)
+            if self._decision:
+                stored["decision"] = dict(self._decision)
+            return stored
         recommendation = {
             "schema_version": SCHEMA_VERSION,
             "recommendation_id": RECOMMENDATION_ID,
@@ -232,7 +244,63 @@ class MockApi:
             recommendation["decision"] = dict(self._decision)
         return recommendation
 
-    def _finding(self) -> dict[str, Any]:
+    def _finding(self, finding_id: str | None = None) -> dict[str, Any]:
+        if self._findings:
+            raw = dict(self._findings.get(finding_id or "", next(iter(self._findings.values()))))
+            related = [event for event in self._events if event.get("event_id") in raw["event_ids"]]
+            investigation = self._investigation or {
+                "schema_version": SCHEMA_VERSION,
+                "status": "pending" if self._inference_client else "unavailable",
+                "summary": None,
+                "served_model": self._inference_client.model if self._inference_client else None,
+                "route": "litellm-local" if self._inference_client else None,
+            }
+            recommendation = next(iter(self._recommendations.values()), {})
+            target = recommendation.get("target")
+            if target is None:
+                target = next(
+                    (
+                        event.get("destination")
+                        for event in reversed(related)
+                        if event.get("destination")
+                    ),
+                    None,
+                )
+            raw.update(
+                {
+                    "title": "Suspicious correlated activity",
+                    "status": "completed",
+                    "investigation_status": investigation["status"],
+                    "actor": related[0].get("actor") if related else "business-agent",
+                    "destination": target,
+                    "first_seen": related[0]["timestamp"] if related else GENERATED_AT,
+                    "last_seen": related[-1]["timestamp"] if related else GENERATED_AT,
+                    "timeline": [
+                        {
+                            "schema_version": SCHEMA_VERSION,
+                            "event_id": event["event_id"],
+                            "timestamp": event["timestamp"],
+                            "source_type": event["source_type"],
+                            "action": event["action"],
+                            "destination": event.get("destination", "local"),
+                            "request_bytes": event.get("request_bytes", 0),
+                        }
+                        for event in related
+                    ],
+                    "evidence": [
+                        {
+                            "code": item["detector"],
+                            "label": item["description"],
+                            "score_contribution": item["points"],
+                            "event_ids": list(raw["event_ids"]),
+                        }
+                        for item in raw.get("evidence", [])
+                    ],
+                    "investigation": investigation,
+                    "recommendation_ids": list(self._recommendations),
+                }
+            )
+            return raw
         suspicious_events = SOURCE_EVENTS[15:22]
         investigation = self._investigation or {
             "schema_version": SCHEMA_VERSION,
@@ -288,36 +356,45 @@ class MockApi:
 
     def _source_events(self) -> list[dict[str, Any]]:
         events: list[dict[str, Any]] = []
-        for event in SOURCE_EVENTS:
+        for event in self._events:
             projection = dict(event)
             risk_score = SUSPICIOUS_RISK.get(event["event_id"])
+            finding_id = FINDING_ID
+            for stored_id, finding in self._findings.items():
+                if event["event_id"] in finding["event_ids"]:
+                    risk_score = finding["risk_score"]
+                    finding_id = stored_id
+                    break
             if risk_score is not None:
                 projection["risk_score"] = risk_score
-                projection["finding_id"] = FINDING_ID
+                projection["finding_id"] = finding_id
             events.append(projection)
         return events
 
     def _enforcement_results(self) -> list[dict[str, Any]]:
         if not self._decision or self._decision["decision"] != "approved":
             return []
+        recommendation = self._recommendation()
+        recommendation_id = recommendation["recommendation_id"]
+        destination = recommendation.get("target", "new-receiver.demo.local")
         return [
             {
                 "schema_version": SCHEMA_VERSION,
                 "enforcement_result_id": "enf-synthetic-001",
-                "recommendation_id": RECOMMENDATION_ID,
+                "recommendation_id": recommendation_id,
                 "status": "applied",
                 "event_id": "evt-025",
                 "observed_at": EVENTS_BY_ID["evt-025"]["timestamp"],
-                "destination": "new-receiver.demo.local",
+                "destination": destination,
             },
             {
                 "schema_version": SCHEMA_VERSION,
                 "enforcement_result_id": "enf-synthetic-002",
-                "recommendation_id": RECOMMENDATION_ID,
+                "recommendation_id": recommendation_id,
                 "status": "block_observed",
                 "event_id": "evt-026",
                 "observed_at": EVENTS_BY_ID["evt-026"]["timestamp"],
-                "destination": "new-receiver.demo.local",
+                "destination": destination,
             },
         ]
 
@@ -375,19 +452,27 @@ class MockApi:
                 ],
             )
         if path == "/v1/metrics/summary":
+            total_events = len(self._events)
+            suspicious_ids = {
+                event_id for finding in self._findings.values() for event_id in finding["event_ids"]
+            }
+            if not self._pipeline_mode:
+                suspicious_ids = set(SUSPICIOUS_RISK)
             return 200, _response(
                 generated_at=GENERATED_AT,
-                total_events=22,
-                normal_events=15,
-                suspicious_events=7,
-                findings=1,
-                pending_recommendations=0 if self._decision else 1,
+                total_events=total_events,
+                normal_events=max(0, total_events - len(suspicious_ids)),
+                suspicious_events=len(suspicious_ids),
+                findings=len(self._findings) if self._pipeline_mode else 1,
+                pending_recommendations=(
+                    len(self._recommendations) if self._pipeline_mode else int(not self._decision)
+                ),
                 enforcement_results=len(self._enforcement_results()),
                 metrics=[
                     {
                         "key": "events_processed",
                         "label": "Events processed",
-                        "value": 22,
+                        "value": total_events,
                         "delta": 7,
                         "tone": "neutral",
                     },
@@ -415,17 +500,35 @@ class MockApi:
                 ],
             )
         if path == "/v1/events":
+            events = self._source_events()
             return 200, _response(
                 generated_at=GENERATED_AT,
-                count=len(SOURCE_EVENTS),
-                events=self._source_events(),
+                count=len(events),
+                events=events,
             )
         if path == "/v1/findings":
-            return 200, _response(generated_at=GENERATED_AT, count=1, findings=[self._finding()])
-        if path == f"/v1/findings/{FINDING_ID}":
-            return 200, _response(generated_at=GENERATED_AT, finding=self._finding())
+            findings = (
+                [self._finding(finding_id) for finding_id in self._findings]
+                if self._pipeline_mode
+                else [self._finding()]
+            )
+            return 200, _response(
+                generated_at=GENERATED_AT,
+                count=len(findings),
+                findings=findings,
+            )
+        if path.startswith("/v1/findings/") and path.count("/") == 3:
+            finding_id = path.rsplit("/", 1)[-1]
+            if self._pipeline_mode and finding_id not in self._findings:
+                return 404, _error("not_found", f"unknown finding: {finding_id}")
+            return 200, _response(
+                generated_at=GENERATED_AT,
+                finding=self._finding(finding_id),
+            )
         if path == "/v1/recommendations":
-            recommendations = [self._recommendation()]
+            recommendations = (
+                [self._recommendation()] if self._recommendations or not self._pipeline_mode else []
+            )
             requested_status = query.get("status", [None])[0]
             if requested_status is not None:
                 recommendations = [
@@ -446,7 +549,47 @@ class MockApi:
             )
         return 404, _error("not_found", f"no mock resource exists at {path}")
 
-    def decide(self, payload: Any) -> tuple[int, dict[str, Any]]:
+    def ingest_event(self, payload: Any) -> tuple[int, dict[str, Any]]:
+        if not isinstance(payload, dict) or payload.get("schema_version") != SCHEMA_VERSION:
+            return 400, _error("invalid_event", "a versioned event object is required")
+        event_id = payload.get("event_id")
+        if not isinstance(event_id, str) or not event_id:
+            return 400, _error("invalid_event", "event_id is required")
+        with self._lock:
+            if not any(event.get("event_id") == event_id for event in self._events):
+                self._events.append(dict(payload))
+        return 201, _response(event_id=event_id, accepted=True)
+
+    def store_finding(self, payload: Any) -> tuple[int, dict[str, Any]]:
+        if not isinstance(payload, dict) or payload.get("schema_version") != SCHEMA_VERSION:
+            return 400, _error("invalid_finding", "a versioned finding object is required")
+        finding_id = payload.get("finding_id")
+        if not isinstance(finding_id, str) or not isinstance(payload.get("event_ids"), list):
+            return 400, _error("invalid_finding", "finding_id and event_ids are required")
+        with self._lock:
+            self._findings[finding_id] = dict(payload)
+        return 201, _response(finding_id=finding_id, accepted=True)
+
+    def store_recommendation(self, payload: Any) -> tuple[int, dict[str, Any]]:
+        if not isinstance(payload, dict) or payload.get("schema_version") != SCHEMA_VERSION:
+            return 400, _error(
+                "invalid_recommendation", "a versioned recommendation object is required"
+            )
+        recommendation_id = payload.get("recommendation_id")
+        if (
+            not isinstance(recommendation_id, str)
+            or payload.get("action_type") != "deny_destination"
+        ):
+            return 400, _error(
+                "invalid_recommendation", "a constrained recommendation_id is required"
+            )
+        with self._lock:
+            self._recommendations[recommendation_id] = dict(payload)
+        return 201, _response(recommendation_id=recommendation_id, accepted=True)
+
+    def decide(
+        self, payload: Any, recommendation_id: str = RECOMMENDATION_ID
+    ) -> tuple[int, dict[str, Any]]:
         if not isinstance(payload, dict):
             return 400, _error("invalid_request", "request body must be a JSON object")
         if payload.get("schema_version") != SCHEMA_VERSION:
@@ -467,7 +610,7 @@ class MockApi:
             if self._decision is None:
                 self._decision = {
                     "schema_version": SCHEMA_VERSION,
-                    "recommendation_id": RECOMMENDATION_ID,
+                    "recommendation_id": recommendation_id,
                     "decision": decision,
                     "decided_at": EVENTS_BY_ID["evt-024"]["timestamp"],
                 }
@@ -509,7 +652,11 @@ class MockApi:
 
 
 class MockRequestHandler(BaseHTTPRequestHandler):
-    api = MockApi(LiteLLMClient.from_env(), GpuTelemetryCollector())
+    api = MockApi(
+        LiteLLMClient.from_env(),
+        GpuTelemetryCollector(),
+        pipeline_mode=os.environ.get("MOCK_PIPELINE_MODE") == "1",
+    )
 
     def _write_json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -527,15 +674,6 @@ class MockRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         request = urlsplit(self.path)
-        investigation_path = f"/v1/findings/{FINDING_ID}/investigate"
-        if request.path == investigation_path:
-            status, response = self.api.investigate()
-            self._write_json(status, response)
-            return
-        expected_path = f"/v1/recommendations/{RECOMMENDATION_ID}/decision"
-        if request.path != expected_path:
-            self._write_json(404, _error("not_found", f"no mock resource exists at {request.path}"))
-            return
         try:
             content_length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
@@ -555,7 +693,23 @@ class MockRequestHandler(BaseHTTPRequestHandler):
         except (json.JSONDecodeError, UnicodeDecodeError):
             self._write_json(400, _error("invalid_json", "request body must be valid JSON"))
             return
-        status, response = self.api.decide(payload)
+
+        if request.path == "/v1/events":
+            status, response = self.api.ingest_event(payload)
+        elif request.path == "/v1/findings":
+            status, response = self.api.store_finding(payload)
+        elif request.path == "/v1/recommendations":
+            status, response = self.api.store_recommendation(payload)
+        elif request.path.startswith("/v1/findings/") and request.path.endswith("/investigate"):
+            status, response = self.api.investigate()
+        elif request.path.startswith("/v1/recommendations/") and request.path.endswith("/decision"):
+            recommendation_id = request.path.split("/")[3]
+            status, response = self.api.decide(payload, recommendation_id)
+        else:
+            status, response = (
+                404,
+                _error("not_found", f"no mock resource exists at {request.path}"),
+            )
         self._write_json(status, response)
 
     def do_OPTIONS(self) -> None:
