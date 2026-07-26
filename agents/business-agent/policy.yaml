@@ -1,0 +1,45 @@
+# OpenShell sandbox policy for business-agent.
+#
+#   just apply
+#   openshell policy set <sandbox> --policy policy.yaml --wait
+#
+# Starts closed. Widen it by watching real denials —
+#   nemoclaw <sandbox> logs --follow
+# — and adding only the endpoint that was denied. Do not pre-authorize the
+# internet because it is convenient; the sandbox is the whole point.
+
+version: 1
+
+# Static: locked at sandbox creation, cannot be hot-reloaded.
+filesystem_policy:
+  read_only:
+    - /usr
+    - /lib
+    - /etc
+  read_write:
+    - /sandbox
+    - /tmp
+  # bool, checked by agentkit-validate. Effect of `true` is OpenShell's
+  # semantics, not confirmed on any host — see
+  # libs/skills/openshell-data-boundary for what's verified vs guessed.
+  include_workdir: false
+
+# agentkit-validate does not check landlock/process shape or values at all —
+# see libs/skills/openshell-data-boundary's validator-blind-spot section
+# before relying on a typo or nonsense value here getting caught locally.
+landlock:
+  compatibility: best_effort
+
+process:
+  run_as_user: sandbox
+  run_as_group: sandbox
+
+# Dynamic: hot-reloadable on a running sandbox.
+#
+# Scaffold only (dxnvh-332.8): narrowest possible start is no egress at all.
+# Empty means no outbound network. Local inference is reachable regardless —
+# OpenShell's baseline exempts https://inference.local from the proxy — so an
+# all-local agent needs nothing here. When the business workflow (epic 1)
+# needs something, widen this to exactly the endpoint a real denial names —
+# never a broad allowance. Reusable fragments to paste in: ../../libs/policies/
+network_policies: {}

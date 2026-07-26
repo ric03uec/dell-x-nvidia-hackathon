@@ -1,0 +1,35 @@
+# NemoClaw declarative multi-agent manifest for business-agent — the normal
+# workflow the security agent watches over.
+#
+#   just apply                      # validate, then apply to this agent's sandbox
+#   nemoclaw <sandbox> agents apply -f agents.yaml --yes
+#   nemoclaw onboard --agents ./agents.yaml --name <sandbox>   # first time
+#
+# Models are names the local inference route on the Spark actually serves. Check
+# with `nemoclaw <sandbox> status` before inventing one.
+#
+# Scaffold only (dxnvh-332.8): the summarizer subagent below is the hello-agent
+# worked example, unmodified. The actual business workflow and its subagent
+# shape are epic 1.
+
+defaults:
+  subagents:
+    maxSpawnDepth: 2
+
+main:
+  tools:
+    profile: minimal
+    allow: [read]
+  subagents:
+    allowAgents: [summarizer]
+    delegationMode: prefer
+    requireAgentId: true
+
+agents:
+  - id: summarizer
+    description: Condenses a file the sandbox can already read.
+    # Small local model — this agent only reads and summarizes, so it does not
+    # need the big one. Per-agent model choice is the cheapest lever on a Spark.
+    model: nvidia/nemotron-3-nano-30b
+    tools:
+      allow: [read]

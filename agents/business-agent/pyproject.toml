@@ -1,0 +1,27 @@
+[project]
+name = "business-agent"
+version = "0.1.0"
+description = "Business agent performing the workflow the security agent watches over. Workflow logic lands in epic 1 (dxnvh-332.8 is scaffold + manifests only)."
+requires-python = ">=3.11"
+dependencies = ["agentkit"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "httpx>=0.27",
+]
+
+# Shared code is a workspace member, resolved and locked together with every
+# other project here in the single root uv.lock.
+[tool.uv.sources]
+agentkit = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Lint/type/test config lives at the workspace root (../../pyproject.toml) so
+# every member shares one set of rules — do not redeclare [tool.ruff],
+# [tool.mypy] or [tool.pytest.ini_options] here.
