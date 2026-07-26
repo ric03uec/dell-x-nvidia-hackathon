@@ -16,12 +16,27 @@ default:
 # Install dependencies via pnpm
 [group('project')]
 setup:
-    pnpm install
+    pnpm install --frozen-lockfile
 
 # Start the dev server on the port assigned in docs/ports.md.
 # Passed on the command line because vite.config.ts pins host but not port.
 [group('project')]
 dev port=env("DASHBOARD_PORT", "8300"):
+    pnpm run dev -- --port {{ port }}
+
+# Run the contract-shaped local API used for standalone dashboard development
+[group('project')]
+mock:
+    pnpm run mock
+
+# Run the dashboard and mock API together for standalone UI development
+[group('project')]
+demo port=env("DASHBOARD_PORT", "8300"):
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pnpm run mock &
+    mock_pid=$!
+    trap 'kill "$mock_pid" 2>/dev/null || true' EXIT INT TERM
     pnpm run dev -- --port {{ port }}
 
 # Typecheck and lint. Composed from the app's two scripts — it has no single
@@ -36,7 +51,7 @@ check:
 build:
     pnpm run build
 
-# Build as the current test gate (the app has no dedicated test runner yet)
+# Run mock/API characterization tests and the production build gate
 [group('project')]
 test:
     pnpm run test

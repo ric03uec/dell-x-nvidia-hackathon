@@ -5,11 +5,13 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: "127.0.0.1",
+    port: Number(process.env.DASHBOARD_PORT || 8300),
     watch: { useFsEvents: false, usePolling: true },
     proxy: {
       "/api": {
-        target: process.env.DASHBOARD_API_TARGET || "http://127.0.0.1:8080",
+        target: process.env.DASHBOARD_API_TARGET || "http://127.0.0.1:8100",
         changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ""),
       },
     },
   },
