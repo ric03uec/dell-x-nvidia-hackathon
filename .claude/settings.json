@@ -1,0 +1,19 @@
+{
+  "extraKnownMarketplaces": {
+    "dell-x-nvidia-hackathon-local": {
+      "source": {
+        "source": "settings",
+        "name": "dell-x-nvidia-hackathon-local",
+        "plugins": [
+          {
+            "name": "nemoclaw-lessons",
+            "source": "./claude-plugin"
+          }
+        ]
+      }
+    }
+  },
+  "enabledPlugins": {
+    "nemoclaw-lessons@dell-x-nvidia-hackathon-local": true
+  }
+}
