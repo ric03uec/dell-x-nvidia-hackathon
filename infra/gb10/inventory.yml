@@ -1,0 +1,5 @@
+all:
+  hosts:
+    gb10:
+      ansible_host: hack
+      ansible_user: dell

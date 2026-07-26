@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+port="${VLLM_HACK_TUNNEL_PORT:-14000}"
+
+if ! timeout 2 bash -c "</dev/tcp/127.0.0.1/${port}" 2>/dev/null; then
+  ssh -fN -o ExitOnForwardFailure=yes -L "${port}:127.0.0.1:4000" hack >/dev/null 2>&1
+fi
+
+key="$(ssh hack 'docker exec hack-litellm printenv LITELLM_MASTER_KEY' 2>/dev/null || true)"
+if [ -z "${key}" ]; then
+  echo "failed to read LITELLM_MASTER_KEY from hack-litellm" >&2
+  exit 1
+fi
+
+printf %s "${key}"
