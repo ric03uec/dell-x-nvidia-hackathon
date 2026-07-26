@@ -1,325 +1,404 @@
-# Local-Only Exfiltration Protection
+# Squid-Centered Local Exfiltration Protection
 
 **Hackathon architecture with a path to production**
 
 **Target:** Dell system with NVIDIA GB10
 
-**Core rule:** Customer events, models, and analysis stay on the appliance.
+**Core rule:** Customer traffic metadata, events, models, and analysis stay on the appliance.
 
 ## 1. What we are building
 
-A local appliance that collects security activity, detects unusual outbound behavior live, and uses a more powerful GPU model overnight to find deeper patterns and improve the live detector.
+For the hackathon, **Squid is the main collection and enforcement point**. Test clients use Squid as an explicit web proxy. A local collector streams Squid access logs into a fast anomaly detector. A more powerful GPU model analyzes the complete history offline each night and proposes improvements to the live detector.
 
-The term previously written as “CVS reports” means **CVE (Common Vulnerabilities and Exposures) records and online security advisories**, such as MITRE CVE, NIST NVD, CISA KEV, and vendor advisories. CVEs provide risk context; they do not directly prove exfiltration.
+Additional local context comes from:
 
-## 2. Hackathon MVP
+- **CVE records and security advisories:** MITRE CVE, NIST NVD, CISA KEV, and vendor advisories.
+- **Authorized Nmap discovery:** identifies test assets and services.
+- **Analyst feedback:** marks alerts as normal or malicious.
 
-Build one Docker Compose application on the GB10. Do not build production endpoint agents or a distributed platform during the hackathon.
+CVEs add asset-risk context but do not directly prove exfiltration.
 
-### MVP architecture
+## 2. Hackathon MVP architecture
 
 ```mermaid
 flowchart LR
-    subgraph Sources[Sources]
-        LIVE[Live Demo Events]
-        REPORTS[Firewall / Proxy Report]
-        CVE[CVE + CISA KEV Snapshot]
-        SCAN[Authorized Nmap Scan]
+    CLIENT[Test Clients]
+    INTERNET[Test Internet Destination]
+
+    subgraph Appliance[Local GB10 Appliance]
+        SQUID[Squid Proxy] --> LOG[Squid access.log]
+        LOG -->|Live tail| COLLECTOR[Log Collector]
+        CVE[CVE + CISA KEV Snapshot] --> ENRICH
+        NMAP[Authorized Nmap Scan] --> ENRICH
+
+        COLLECTOR --> API[FastAPI Ingestion]
+        API --> ENRICH[Normalize + Enrich]
+        ENRICH --> DB[(PostgreSQL)]
+
+        subgraph Online[Online / Live - Seconds]
+            FEATURES[Squid Features]
+            RULES[Rules + Rolling Baselines]
+            SMALL[Small Isolation Forest]
+            SCORE[Risk Score]
+        end
+
+        ENRICH --> FEATURES
+        FEATURES --> RULES
+        FEATURES --> SMALL
+        RULES --> SCORE
+        SMALL --> SCORE
+        SCORE --> DB
+        SCORE --> UI[Streamlit Dashboard]
+        SCORE -.-> LLM[Local LLM Explanation] --> UI
+
+        subgraph Offline[Offline / Nightly - GPU]
+            SNAPSHOT[Historical Snapshot]
+            LARGE[Powerful Offline Model]
+            EVAL[Replay + Evaluate]
+            APPROVE{Analyst Approval}
+        end
+
+        DB -->|Nightly| SNAPSHOT --> LARGE --> EVAL --> APPROVE
+        APPROVE -->|Thresholds / new small model| SMALL
+        APPROVE -->|Deeper incidents| UI
+        UI -->|Labels| DB
+
+        POLICY[Local Denylist / ACL Policy]
+        UI -->|Approved policy only| POLICY
+        POLICY -.->|Future requests| SQUID
     end
 
-    subgraph Process[Local Processing]
-        API[FastAPI Ingestion]
-        NORMALIZE[Normalize + Enrich]
-        DB[(PostgreSQL)]
-    end
-
-    subgraph Online[Online / Live - Seconds]
-        FEATURES[Simple Features]
-        RULES[Rules + Baselines]
-        SMALL[Small Live Model]
-        SCORE[Risk Score]
-    end
-
-    subgraph Offline[Offline / Nightly - GPU]
-        SNAPSHOT[Training Snapshot]
-        LARGE[Powerful Offline Model]
-        EVAL[Evaluate + Calibrate]
-        PROMOTE{Approve Update}
-    end
-
-    UI[Local Dashboard]
-    LLM[Local LLM Explanation]
-
-    LIVE --> API
-    REPORTS --> API
-    CVE --> API
-    SCAN --> API
-    API --> NORMALIZE --> DB
-
-    NORMALIZE --> FEATURES
-    FEATURES --> RULES
-    FEATURES --> SMALL
-    RULES --> SCORE
-    SMALL --> SCORE
-    SCORE --> DB
-    SCORE --> UI
-    SCORE -.-> LLM --> UI
-
-    DB -->|Nightly| SNAPSHOT --> LARGE --> EVAL --> PROMOTE
-    PROMOTE -->|New thresholds / small model| SMALL
-    PROMOTE -->|Deeper findings| UI
-    UI -->|Analyst labels| DB
+    CLIENT -->|Explicit proxy| SQUID
+    SQUID --> INTERNET
 ```
 
-**Online** means the fast event-time path running locally. **Offline** means local batch processing, normally run nightly. It does not mean cloud processing.
+**Online** means fast, local event-time scoring. **Offline** means local batch analysis, normally run nightly. Neither means cloud processing.
 
-### What to demo
+### Important timing boundary
 
-1. Load a local CVE/NVD and CISA KEV snapshot.
-2. Import one sample firewall or Squid report.
-3. Run an authorized Nmap scan against a small test subnet.
-4. Generate live events representing normal transfers.
-5. Generate one suspicious event: a large, off-hours upload to a new destination from a vulnerable asset.
-6. Score it immediately with rules, baselines, and the small live model.
-7. Show the alert and local-LLM explanation in the dashboard.
-8. Let an analyst label it normal or malicious.
-9. Trigger the “nightly” GPU job manually for the demo.
-10. Show the powerful offline model finding the anomaly and proposing an updated live model or threshold.
-11. Approve the update and show model version/rollback.
+Squid normally writes an access-log record during or after a request. Therefore:
 
-## 3. Keep the MVP small
+- The log stream can provide near-live detection and alerting.
+- It cannot retroactively stop the first completed transfer.
+- An approved denylist or Squid external ACL can block later requests before they start.
+- The LLM and powerful offline model must never run inside Squid's request path.
 
-### Five application components
+For the hackathon, start in **observe mode**. Demonstrate that an approved policy blocks a repeated request to the same destination.
+
+## 3. Minimal components
+
+Use one Docker Compose deployment with six services:
 
 | Component | Hackathon choice | Responsibility |
 |---|---|---|
-| API | FastAPI | Receive files and live events |
-| Database | PostgreSQL | Events, assets, CVEs, labels, and model metadata |
-| Worker | Python | Normalize, scan, score, and run scheduled jobs |
-| Dashboard | Streamlit | Alerts, explanations, labels, and model approval |
-| Model server | PyTorch plus Ollama/llama.cpp | Offline GPU model and local LLM |
+| Proxy | Squid | Routes test web traffic and writes access logs |
+| API | FastAPI | Receives structured Squid events |
+| Worker/collector | Python | Tails logs, normalizes events, scans, scores, and runs nightly jobs |
+| Database | PostgreSQL | Events, baselines, assets, CVEs, labels, and model versions |
+| Dashboard | Streamlit | Alerts, explanations, labels, policy, and model approval |
+| Model service | PyTorch plus Ollama/llama.cpp | Powerful offline model and local LLM |
 
-PostgreSQL can act as the job queue for the MVP. Do not add Kafka, a feature store, Kubernetes, or multiple databases yet.
+PostgreSQL can also hold MVP jobs. Do not add Kafka, Kubernetes, a separate feature store, or production endpoint agents during the hackathon.
 
-### MVP data sources
+## 4. Squid live ingestion
 
-Use only four sources:
+### 4.1 Explicit proxy
 
-- **Live event generator:** simulates endpoint or network-transfer events.
-- **One internal report:** a sample Squid, firewall, DLP, or SIEM CSV/JSON export.
-- **CVE snapshot:** a downloaded NVD/CVE sample plus CISA KEV catalog, stored locally.
-- **Nmap:** scans only an explicitly configured test subnet.
+Configure only the hackathon test clients to use the GB10 appliance as an explicit proxy, for example:
 
-If time permits, tail a real Squid log. A production endpoint agent can come later.
+```text
+Proxy host: gb10.local
+Proxy port: 3128
+```
 
-### Minimal event format
+Do not transparently redirect a business network during the demo.
+
+### 4.2 Structured access log
+
+Add a custom log format to `squid.conf`:
+
+```conf
+logformat exfilguard ts=%ts.%03tu src=%>a user=%un method=%rm uri=%ru status=%>Hs req_bytes=%>st resp_bytes=%<st mime=%mt result=%Ss
+access_log /var/log/squid/access.log exfilguard
+
+# Reduces demo latency; revisit for production throughput.
+buffered_logs off
+```
+
+Validate and reload the configuration:
+
+```bash
+squid -k parse
+squid -k reconfigure
+```
+
+Field availability and byte accounting can differ by Squid version and HTTPS mode. Verify `req_bytes` and `resp_bytes` with known test transfers before relying on them.
+
+### 4.3 Collector
+
+The worker tails `/var/log/squid/access.log` continuously and posts new records to FastAPI.
+
+For the first demo, `tail -F` is acceptable. The collector should still:
+
+- Remember its file position when possible.
+- Handle log rotation.
+- Buffer briefly if FastAPI is unavailable.
+- Batch events under high volume.
+- Avoid logging credentials or sensitive URL query parameters.
+
+Vector or Fluent Bit can replace the Python tailer later without changing the API.
+
+### 4.4 Normalized event
 
 ```json
 {
   "timestamp": "2026-03-15T22:15:00Z",
+  "source_type": "squid",
   "user": "alice",
+  "source_ip": "10.0.0.17",
   "device": "laptop-17",
-  "process": "browser",
+  "method": "POST",
   "destination": "unknown-storage.example",
-  "bytes_sent": 25000000,
-  "file_sensitivity": "confidential",
+  "request_bytes": 25000000,
+  "response_bytes": 842,
+  "status": 200,
   "outside_work_hours": true,
   "asset_has_kev": true
 }
 ```
 
-## 4. Models
+## 5. HTTPS limitation
 
-### Small live model
+Without TLS interception, Squid usually sees the HTTPS `CONNECT` destination but not the encrypted request path, filename, content, or reliable per-request details inside the tunnel.
 
-The live path must respond quickly and remain explainable. Use:
+The MVP will **not** enable TLS interception. It will use:
+
+- Destination and connection metadata from normal HTTPS proxy traffic.
+- A controlled HTTP test upload with non-sensitive generated data when request-size visibility is required.
+- Simulated file-sensitivity metadata if that feature is shown in the dashboard.
+
+A production endpoint agent or explicitly authorized ICAP/TLS inspection can add file-level context later. The architecture must not claim that Squid alone identifies the uploaded file inside ordinary HTTPS traffic.
+
+## 6. Live detection model
+
+The live path uses three simple signals:
 
 1. Deterministic rules.
-2. Per-user/device rolling baselines.
-3. A small Isolation Forest model.
+2. Per-user, source-IP, and destination rolling baselines.
+3. A small Isolation Forest model running on CPU.
 
-Initial features:
+Initial Squid-derived features:
 
-- `log(bytes_sent + 1)`
-- New destination for user
-- New destination for organization
-- Transfer size relative to user baseline
-- Outside normal working hours
-- Sensitive file indicator
-- Number of uploads in the last hour
-- Asset has a matching CVE or CISA KEV entry
+- Request method, especially `POST`, `PUT`, and `PATCH`
+- `log(request_bytes + 1)` when available
+- Destination new to the user or organization
+- Transfer size relative to the user's baseline
+- Requests and unique destinations in the last hour
+- Activity outside normal working hours
+- Squid allow/deny/result status
+- Source asset matched to a CVE or CISA KEV entry
 
 Example decision:
 
 ```text
-Risk: 91/100
+Risk: 86/100
 - New destination: +20
-- 8x normal transfer size: +25
-- Confidential file: +20
-- Outside working hours: +10
-- Known-exploited vulnerability on device: +10
-- Isolation Forest anomaly: +6
+- 8x normal request size: +25
+- POST outside working hours: +15
+- Known-exploited vulnerability on source asset: +10
+- Isolation Forest anomaly: +16
 ```
 
-For the MVP, only alert. Do not automatically block based solely on an unsupervised score.
+For the MVP, a model anomaly creates an alert. Blocking requires an analyst-approved destination or policy.
 
-### Powerful offline model
+## 7. Squid enforcement
 
-The GB10 runs a more powerful model over historical sequences during the nightly job. For the hackathon, use a **PyTorch autoencoder** over time-window features. If the team has time, replace or extend it with a temporal transformer after the MVP.
+### MVP enforcement
 
-The offline model can use features that are too expensive for every live request:
+Maintain a local file of approved denied domains:
 
-- Sequences of the user’s last 20–100 events
-- Activity over 1-hour, 24-hour, and 7-day windows
-- Relationships among users, devices, processes, and destinations
-- Slow, repeated transfers that individually look normal
-- CVE/KEV context for the source asset
-- Analyst-confirmed normal and malicious activity
+```conf
+acl exfil_denied dstdomain "/etc/squid/exfil-denied-domains.txt"
+http_access deny exfil_denied
+```
+
+Place this deny rule before the general `http_access allow` rule. The dashboard adds a destination only after analyst approval. The worker then safely validates and reloads Squid. This demonstrates prevention on the next request without putting ML in the request path.
+
+### Eventual live policy check
+
+A production version can use a fast local `external_acl_type` helper:
+
+```conf
+external_acl_type exfil_policy ttl=10 negative_ttl=2 %SRC %LOGIN %DST /opt/exfil/check-policy
+acl exfil_denied_dynamic external exfil_policy
+http_access deny exfil_denied_dynamic
+```
+
+The helper may check only cached, deterministic policy such as a denied destination, restricted user, or isolated device. It must have strict timeouts and a defined fail-open/fail-closed policy. It must not call the LLM or GPU model.
+
+## 8. Powerful offline model on the GB10
+
+Each night, the GB10 runs a more powerful model over the local Squid history. For the hackathon, use a **PyTorch autoencoder** over time-window features. A temporal transformer can be an eventual enhancement.
+
+The offline model can analyze:
+
+- A user's previous 20–100 proxy events
+- 1-hour, 24-hour, and 7-day behavior
+- Slow repeated uploads that look harmless individually
+- Relationships among users, devices, and destinations
+- CVE/KEV context for source assets
+- Analyst-confirmed normal and malicious events
 
 It produces:
 
-- A deeper anomaly score for historical events
-- Groups of related suspicious events
+- Deeper anomaly scores and related-event groups
+- New incidents for review
 - Recommended live thresholds
-- A candidate small model or teacher-generated labels
-- New incidents for analyst review
+- Teacher-generated labels or a candidate small model
 
-The powerful model remains available for on-demand investigations as well as the nightly run. It does not need to sit in the sub-second live path.
+The offline model also supports on-demand investigation. It is powerful but does not need to meet Squid request latency.
 
-### Learning loop
+### Safe learning loop
 
 ```mermaid
 flowchart LR
-    EVENTS[New Events] --> LIVE[Live Scoring]
-    LIVE --> LABELS[Analyst Labels]
+    SQUID[Squid Events] --> LIVE[Live Scoring]
     LIVE --> STORE[(Local History)]
-    LABELS --> STORE
-    STORE -->|Nightly snapshot| POWERFUL[Powerful GPU Model]
-    POWERFUL --> TEST[Replay + Evaluate]
+    LIVE --> REVIEW[Analyst Review]
+    REVIEW -->|Labels| STORE
+    STORE -->|Nightly snapshot| GPU[Powerful GPU Model]
+    GPU --> TEST[Replay + Evaluate]
     TEST --> GATE{Better and Safe?}
-    GATE -->|Yes, approve| VERSION[Versioned Candidate]
-    VERSION --> DEPLOY[Update Live Model / Thresholds]
-    GATE -->|No| KEEP[Keep Current Model]
+    GATE -->|Approve| VERSION[Versioned Candidate]
+    VERSION --> DEPLOY[Update Small Model / Thresholds]
+    GATE -->|Reject| KEEP[Keep Current Version]
 ```
 
-Do not train directly on unresolved high-risk events. Otherwise, repeated malicious activity can become part of the “normal” baseline. Every promoted model is versioned and can be rolled back.
+Do not train on unresolved high-risk events as if they were normal. Every promoted model is versioned and supports rollback.
 
-### Local LLM
+## 9. Local LLM
 
-The local LLM is not the anomaly detector. It receives structured evidence and:
+The local LLM receives structured evidence after scoring and:
 
-- Explains why an event was flagged.
-- Summarizes related events.
+- Explains why a Squid event was flagged.
+- Summarizes a user's related proxy activity.
+- Adds relevant CVE/KEV context.
 - Suggests investigation steps.
-- Helps map unfamiliar report columns.
 
-It recommends actions but does not execute blocking commands. Logs, filenames, CVE text, and report content are untrusted input and cannot be treated as instructions.
+It recommends actions but cannot modify Squid policy directly. Squid logs, URLs, CVE text, and report content are untrusted data, not LLM instructions.
 
-## 5. Installation on the GB10
+## 10. Hackathon demo
 
-For the hackathon:
+1. Start Docker Compose on the GB10.
+2. Configure one test client or `curl` to use Squid.
+3. Load a local CVE/NVD sample and CISA KEV snapshot.
+4. Run Nmap against one authorized test subnet and associate a test asset with a KEV.
+5. Generate several normal requests through Squid.
+6. Send a large, off-hours test upload to a new destination through Squid.
+7. Stream the Squid log into FastAPI and score it immediately.
+8. Show the risk evidence and local-LLM explanation in Streamlit.
+9. Label the event and trigger the nightly GPU job manually.
+10. Show the powerful model's deeper result and candidate threshold/model.
+11. Approve the candidate or roll it back.
+12. Approve the suspicious destination for the denylist, repeat the request, and show Squid blocking it.
+
+## 11. Installation on the GB10
 
 1. Install Docker, Docker Compose, the NVIDIA driver, and NVIDIA Container Toolkit.
 2. Verify GPU access with `nvidia-smi`.
-3. Verify whether the host is ARM64 with `uname -m`; use `linux/arm64` images if required.
-4. Download model files once, then run all model inference locally.
-5. Start the API, PostgreSQL, worker, dashboard, and model server with Docker Compose.
-6. Import the CVE/KEV snapshot and sample security report.
-7. Configure one authorized scan range.
-8. Open only the dashboard and ingestion ports on the internal network.
+3. Check `uname -m`; use `linux/arm64` images if the Grace-based host requires them.
+4. Download models once and store them locally.
+5. Start Squid, FastAPI, PostgreSQL, the worker, Streamlit, and the model service.
+6. Bind-mount the Squid log directory read-only into the worker.
+7. Load the CVE/KEV snapshot and configure one authorized scan range.
+8. Expose port 3128 only to test clients and restrict the dashboard to the internal management network.
 
-The CVE snapshot can be refreshed through an allowlisted outbound-only updater that sends no customer data. A fully air-gapped business can import a signed update bundle instead.
+Suggested resource allocation:
 
-Suggested resource use:
-
-- CPU: API, PostgreSQL, rules, and small live model
+- CPU: Squid, API, PostgreSQL, collector, rules, and small live model
 - GPU: powerful offline model and local LLM
-- Disk: events, CVE database, model versions, and audit history
+- Disk: Squid history, normalized events, CVEs, labels, models, and audit history
 
-## 6. Four-person split
+A connected installation can refresh CVE data through an allowlisted outbound-only updater that sends no customer data. An air-gapped installation imports a signed update bundle.
 
-### Member 1 — Sources and ingestion
+## 12. Four-person split
 
-- FastAPI ingestion
-- Sample report importer
-- CVE/KEV snapshot loader
-- Live event generator
+### Member 1 — Squid and live collection
+
+- Squid container and explicit-proxy configuration
+- Structured log format and collector
+- Test traffic and upload generator
+- Denylist/reload integration
 
 ### Member 2 — Processing and live detection
 
-- Normalization and feature extraction
-- Rolling baselines and rules
-- Isolation Forest scoring
-- Risk-score explanations
+- FastAPI ingestion and normalized event schema
+- Rolling baselines and feature extraction
+- Rules, Isolation Forest, and risk score
+- CVE/Nmap enrichment
 
 ### Member 3 — Powerful offline model
 
 - PyTorch autoencoder and nightly job
-- Training dataset and exclusions
-- Evaluation, candidate versions, and rollback
+- Historical windows and training exclusions
+- Evaluation, model versions, promotion, and rollback
 - Optional teacher-to-small-model update
 
-### Member 4 — Dashboard and deployment
+### Member 4 — Dashboard, LLM, and GB10 deployment
 
-- Streamlit dashboard
+- Streamlit alerts and analyst labels
 - Local LLM explanations
-- Analyst labels and model approval
-- Docker Compose and GB10 setup
+- Policy and model approval screens
+- Docker Compose and GB10 GPU setup
 
-## 7. Eventual production architecture
-
-After the hackathon, the same data flow can be expanded without changing the core design.
+## 13. Eventual architecture
 
 ```mermaid
 flowchart LR
-    subgraph EnterpriseSources[Enterprise Sources]
+    USERS[Managed Users] --> SQUID[Highly Available Squid Proxy]
+    SQUID --> WEB[Internet]
+    SQUID --> STREAM[Durable Log Stream]
+
+    subgraph Context[Additional Context]
         AGENTS[Signed Endpoint Agents]
-        LOGS[Firewall / Proxy / EDR / SIEM]
         NET[Zeek / NetFlow / DNS]
         INTEL[CVE / KEV / Vendor Intelligence]
-        ASSETS[Asset + Identity Systems]
+        ID[Asset + Identity Systems]
     end
 
-    subgraph Collection[Collection]
-        CONNECT[Versioned Connectors]
-        QUEUE[Durable Event Queue]
+    subgraph Live[Production Live Path]
         PIPE[Validation + Enrichment]
-    end
-
-    subgraph LiveProduction[Highly Available Live Path]
         FEATURE[Streaming Feature Store]
         POLICY[Rules + DLP]
-        LIVEPROD[Small Model Serving]
-        ENFORCE[Alert / Warn / Block / Isolate]
+        MODEL[Small Model Serving]
+        RESPONSE[Alert + Squid/EDR Enforcement]
     end
 
-    subgraph OfflineProduction[GB10 Offline Intelligence]
-        LAKE[(Encrypted History)]
-        BIG[Powerful Temporal / Graph Model]
-        LOCAL_LLM[Local LLM + Investigation]
+    subgraph Offline[GB10 Offline Intelligence]
+        HISTORY[(Encrypted History)]
+        LARGE[Powerful Temporal / Graph Model]
+        LLM[Local LLM Investigation]
         REGISTRY[Signed Model Registry]
     end
 
-    AGENTS --> CONNECT
-    LOGS --> CONNECT
-    NET --> CONNECT
-    INTEL --> CONNECT
-    ASSETS --> CONNECT
-    CONNECT --> QUEUE --> PIPE --> FEATURE
+    STREAM --> PIPE
+    AGENTS --> PIPE
+    NET --> PIPE
+    INTEL --> PIPE
+    ID --> PIPE
+    PIPE --> FEATURE
     FEATURE --> POLICY
-    FEATURE --> LIVEPROD
-    POLICY --> ENFORCE
-    LIVEPROD --> ENFORCE
-    PIPE --> LAKE
-    LAKE --> BIG
-    BIG --> LOCAL_LLM
-    BIG --> REGISTRY --> LIVEPROD
+    FEATURE --> MODEL
+    POLICY --> RESPONSE
+    MODEL --> RESPONSE
+    RESPONSE --> SQUID
+    PIPE --> HISTORY
+    HISTORY --> LARGE --> LLM
+    LARGE --> REGISTRY --> MODEL
 ```
 
-Production additions include signed endpoint agents, high availability, RBAC, encrypted backups, retention controls, tamper-evident audit logs, signed model artifacts, staged enforcement, and integrations with firewalls or EDR systems.
+Production additions include endpoint metadata for HTTPS/file visibility, durable queues, high availability, RBAC, encrypted backups, retention controls, tamper-evident audit logs, signed policy/model artifacts, and staged enforcement.
 
-## 8. Definition of hackathon success
+## 14. Definition of success
 
-The MVP succeeds if it can demonstrate this story locally on the GB10:
-
-> A live transfer arrives, receives an immediate explainable risk score, and appears in the dashboard. That night, the powerful GPU model analyzes the broader sequence, finds deeper evidence, and proposes an improvement. An analyst reviews and promotes the improvement without any customer data leaving the appliance.
+> A test upload passes through Squid, its log is scored locally within seconds, and the alert is explained in the dashboard. The powerful GB10 model later analyzes the broader history and proposes a reviewed improvement. An analyst can approve a policy that causes Squid to block the next matching request, with no customer telemetry leaving the appliance.
