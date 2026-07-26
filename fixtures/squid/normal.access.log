@@ -1,0 +1,2 @@
+ts=1773583205.000 src=10.0.0.17 user=alice method=GET uri=https://docs.internal.example/api-reference status=200 req_bytes=612 resp_bytes=48213 mime=text/html result=TCP_MISS/200
+ts=1773583500.000 src=10.0.0.17 user=alice method=GET uri=https://pypi.org/simple/requests/ status=200 req_bytes=584 resp_bytes=52140 mime=text/html result=TCP_MISS/200

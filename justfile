@@ -26,6 +26,7 @@ check:
     uv run --project {{ lib }} ruff format --check {{ lib }}
     uv run --project {{ lib }} mypy {{ lib }}/src
     @just contracts-check
+    @just fixtures-check
     @just each check
 
 # Run the shared library tests and every agent's tests
@@ -43,6 +44,11 @@ doctor host="":
 [group('contracts')]
 contracts-check:
     uv run --with jsonschema python3 contracts/validate.py
+
+# Validate fixtures/expected/* canonical events against contracts/event.schema.json
+[group('fixtures')]
+fixtures-check:
+    uv run --with jsonschema python3 fixtures/validate.py
 
 # Run a recipe inside one agent project: just a hello-agent test
 [group('agent')]
