@@ -379,54 +379,117 @@ A connected installation can refresh CVE data through an allowlisted outbound-on
 - Policy and model approval screens
 - Docker Compose and GB10 GPU setup
 
-## 13. Eventual architecture
+## 13. Eventual business architecture
+
+The MVP begins with Squid, but the eventual product combines proxy, endpoint, network, business-system, vulnerability, and threat-intelligence data.
+
+| Stage | Data sources |
+|---|---|
+| Hackathon MVP | Squid, generated test traffic, Nmap, and a local CVE/KEV snapshot |
+| Next step | Zeek or NetFlow, DNS, identity/asset inventory, and threat-intelligence feeds |
+| Business product | Signed endpoint agents, EDR/DLP/SIEM, firewall/VPN, file/email audit data, and vendor advisories |
 
 ```mermaid
-flowchart LR
-    USERS[Managed Users] --> SQUID[Highly Available Squid Proxy]
+flowchart TB
+    USERS[Managed Users] -->|Web traffic| SQUID[Highly Available Squid Proxy]
     SQUID --> WEB[Internet]
-    SQUID --> STREAM[Durable Log Stream]
 
-    subgraph Context[Additional Context]
-        AGENTS[Signed Endpoint Agents]
-        NET[Zeek / NetFlow / DNS]
-        INTEL[CVE / KEV / Vendor Intelligence]
-        ID[Asset + Identity Systems]
+    subgraph Sources[All Local and Imported Data Sources]
+        SQLOG[Squid Live Logs]
+        AGENTS[Signed Endpoint Agents\nFile + Process + User]
+        NETWORK[Zeek / NetFlow / DNS\nProxy-Bypass Visibility]
+        SECURITY[Firewall / VPN / EDR / DLP / SIEM]
+        BUSINESS[File Server / NAS / Email Audit]
+        ASSETS[Asset Inventory / Identity / Nmap]
+        VULN[CVE / NVD / CISA KEV / Vendor Advisories]
+        THREAT[Threat Intelligence\nDomains / IPs / Hashes / Reputation]
     end
 
-    subgraph Live[Production Live Path]
-        PIPE[Validation + Enrichment]
-        FEATURE[Streaming Feature Store]
-        POLICY[Rules + DLP]
-        MODEL[Small Model Serving]
-        RESPONSE[Alert + Squid/EDR Enforcement]
+    SQUID --> SQLOG
+
+    subgraph Collection[Local Collection and Processing]
+        CONNECTORS[Authenticated Connectors]
+        QUEUE[Durable Event Stream]
+        NORMALIZE[Validate + Normalize + Deduplicate]
+        ENRICH[Identity + Asset + CVE + Threat Enrichment]
     end
 
-    subgraph Offline[GB10 Offline Intelligence]
-        HISTORY[(Encrypted History)]
-        LARGE[Powerful Temporal / Graph Model]
-        GATEWAY[Local LiteLLM Gateway]
-        LLM[Powerful Local Investigation Model]
-        REGISTRY[Signed Model Registry]
+    SQLOG --> CONNECTORS
+    AGENTS --> CONNECTORS
+    NETWORK --> CONNECTORS
+    SECURITY --> CONNECTORS
+    BUSINESS --> CONNECTORS
+    ASSETS --> CONNECTORS
+    VULN --> CONNECTORS
+    THREAT --> CONNECTORS
+    CONNECTORS --> QUEUE --> NORMALIZE --> ENRICH
+
+    subgraph Live[Online / Live Path - Seconds]
+        FEATURES[Streaming Features + Baselines]
+        RULES[Rules + DLP Policies]
+        SMALL[Small Live Anomaly Model]
+        RISK[Risk + Policy Engine]
     end
 
-    STREAM --> PIPE
-    AGENTS --> PIPE
-    NET --> PIPE
-    INTEL --> PIPE
-    ID --> PIPE
-    PIPE --> FEATURE
-    FEATURE --> POLICY
-    FEATURE --> MODEL
-    POLICY --> RESPONSE
-    MODEL --> RESPONSE
-    RESPONSE --> SQUID
-    PIPE --> HISTORY
-    HISTORY --> LARGE --> GATEWAY --> LLM
-    LARGE --> REGISTRY --> MODEL
+    ENRICH --> FEATURES
+    FEATURES --> RULES
+    FEATURES --> SMALL
+    RULES --> RISK
+    SMALL --> RISK
+
+    subgraph Data[Encrypted Local Data Plane]
+        HISTORY[(Event History)]
+        FEATURESTORE[(Feature Store)]
+        AUDIT[(Audit Log)]
+        REGISTRY[(Signed Model Registry)]
+    end
+
+    ENRICH --> HISTORY
+    FEATURES --> FEATURESTORE
+    RISK --> HISTORY
+    RISK --> AUDIT
+
+    subgraph Offline[Offline / Nightly GB10 Intelligence]
+        DATASET[Approved Historical Snapshot]
+        DEEP[Powerful Temporal / Graph Anomaly Model]
+        LITELLM[Local LiteLLM Gateway]
+        REASON[Powerful Local Reasoning Model]
+        EVALUATE[Replay + Evaluate + Calibrate]
+        GATE{Analyst Approval}
+    end
+
+    HISTORY --> DATASET
+    FEATURESTORE --> DATASET
+    DATASET --> DEEP --> LITELLM --> REASON --> EVALUATE --> GATE
+    GATE -->|Promote / rollback| REGISTRY
+    REGISTRY -->|Versioned update| SMALL
+    GATE -->|Approved rules / thresholds| RULES
+
+    subgraph Response[Response and Investigation]
+        DASHBOARD[Local Analyst Dashboard]
+        EXPLAIN[Fast Local Explanation Model via LiteLLM]
+        ENFORCE[Squid / Firewall / EDR Enforcement]
+    end
+
+    RISK --> DASHBOARD
+    RISK -.->|Structured evidence| LITELLM
+    LITELLM -->|Live alias| EXPLAIN --> DASHBOARD
+    RISK --> ENFORCE
+    DASHBOARD -->|Approved action| ENFORCE
+    ENFORCE --> SQUID
+    DASHBOARD -->|Labels + exclusions| HISTORY
 ```
 
-Production additions include endpoint metadata for HTTPS/file visibility, durable queues, high availability, RBAC, encrypted backups, retention controls, tamper-evident audit logs, signed policy/model artifacts, and staged enforcement.
+### How the eventual model works
+
+1. The **small live model** scores every event quickly using current features and approved nightly updates.
+2. The **powerful temporal/graph model** finds slow or cross-entity patterns over the complete local history.
+3. The **powerful model behind LiteLLM** correlates structured findings and creates investigation summaries.
+4. Replay and evaluation determine whether a candidate improves detection without exceeding the alert budget.
+5. An analyst approves new model versions, thresholds, and rules before they enter the live path.
+6. The dashboard can approve enforcement through Squid, a firewall, or EDR; no generative model enforces directly.
+
+Production additions include high availability, RBAC, encrypted backups, retention controls, tamper-evident audit logs, signed connectors and model artifacts, staged enforcement, and health monitoring.
 
 ## 14. Definition of success
 
