@@ -33,7 +33,7 @@ flowchart LR
 
         COLLECTOR --> API[FastAPI Ingestion]
         API --> ENRICH[Normalize + Enrich]
-        ENRICH --> DB[(PostgreSQL)]
+        ENRICH --> DB[(SQLite)]
 
         subgraph Online[Online / Live - Seconds]
             FEATURES[Squid Features]
@@ -90,18 +90,18 @@ For the hackathon, start in **observe mode**. Demonstrate that an approved polic
 
 ## 3. Minimal components
 
-Use one Docker Compose deployment with six services:
+Use one Docker Compose deployment with five runtime services and one embedded database:
 
 | Component | Hackathon choice | Responsibility |
 |---|---|---|
 | Proxy | Squid | Routes test web traffic and writes access logs |
-| API | FastAPI | Receives structured Squid events |
-| Worker/collector | Python | Tails logs, normalizes events, scans, scores, and runs nightly jobs |
-| Database | PostgreSQL | Events, baselines, assets, CVEs, labels, and model versions |
+| API | FastAPI | Receives events and owns all database writes |
+| Worker/collector | Python | Tails logs, normalizes events, scans, scores, and runs nightly jobs through the API |
+| Embedded database | SQLite | Events, baselines, assets, CVEs, labels, jobs, and model metadata |
 | Dashboard | Streamlit | Alerts, explanations, labels, policy, and model approval |
 | Model service | PyTorch plus local LiteLLM gateway/backends | Offline anomaly model, fast explanation model, and powerful offline model |
 
-PostgreSQL can also hold MVP jobs. Do not add Kafka, Kubernetes, a separate feature store, or production endpoint agents during the hackathon.
+SQLite is sufficient for a single-node hackathon appliance. Enable WAL mode, foreign keys, and a busy timeout. Keep the database on a local GB10 disk, let FastAPI own writes, and have other containers use the API instead of sharing concurrent write access to the SQLite file. Create nightly training snapshots with SQLite's backup API rather than copying an active database file. Do not add Kafka, Kubernetes, a separate feature store, or production endpoint agents during the hackathon.
 
 ### Tool categories
 
@@ -113,7 +113,7 @@ The architecture uses generic capabilities. The named products are replaceable i
 | Proxy content adaptation | Sends approved decrypted HTTP content to a scanner | None for MVP | C-ICAP, custom ICAP, or eCAP service |
 | Log collector/shipper | Tails, buffers, and forwards logs | Python collector | Vector, Fluent Bit, Filebeat, rsyslog |
 | Ingestion API | Accepts normalized local events | FastAPI | Go service or enterprise event gateway |
-| Event database | Stores events, labels, assets, and configuration | PostgreSQL | PostgreSQL plus an analytical/event store |
+| Event database | Stores events, labels, assets, and configuration | SQLite | PostgreSQL plus an analytical/event store for production scale |
 | Network metadata sensor | Describes traffic that may bypass the proxy | None for MVP | Zeek |
 | IDS/IPS | Detects known network attacks and signatures | None for MVP | Suricata or Snort |
 | Flow collector | Records source, destination, duration, and byte counts | Squid metadata only | NetFlow/IPFIX, ntopng |
@@ -137,12 +137,12 @@ For the hackathon, the shortest useful chain is:
 Squid (proxy)
   → Python collector (log shipper)
   → FastAPI (ingestion)
-  → PostgreSQL (event store)
+  → SQLite (embedded event store)
   → Isolation Forest (live anomaly detection)
   → Streamlit (analyst dashboard)
   → approved Squid ACL (enforcement)
 
-Nightly PostgreSQL snapshot
+Nightly SQLite snapshot
   → PyTorch (offline anomaly detection)
   → LiteLLM (local model gateway)
   → powerful local model (correlation and explanation)
@@ -380,16 +380,17 @@ LiteLLM must listen only on the private container network, require an internal A
 3. Check `uname -m`; use `linux/arm64` images if the Grace-based host requires them.
 4. Download models once and store them locally on the GB10.
 5. Configure LiteLLM with local-only `exfil-live` and `exfil-offline` model aliases; do not configure external-provider fallbacks.
-6. Start Squid, FastAPI, PostgreSQL, the worker, Streamlit, LiteLLM, and the local inference backends.
-7. Bind-mount the Squid log directory read-only into the worker.
-8. Load the CVE/KEV snapshot and configure one authorized scan range.
-9. Expose port 3128 only to test clients, restrict the dashboard to the management network, and keep LiteLLM private to the container network.
+6. Start Squid, FastAPI with SQLite, the worker, Streamlit, LiteLLM, and the local inference backends.
+7. Store the SQLite file on a persistent local volume and enable WAL mode, foreign keys, and a busy timeout.
+8. Bind-mount the Squid log directory read-only into the worker.
+9. Load the CVE/KEV snapshot and configure one authorized scan range.
+10. Expose port 3128 only to test clients, restrict the dashboard to the management network, and keep LiteLLM private to the container network.
 
 Suggested resource allocation:
 
-- CPU: Squid, API, PostgreSQL, collector, rules, and small live model
+- CPU: Squid, API/SQLite, collector, rules, and small live model
 - GPU: PyTorch offline model and the local models routed through LiteLLM
-- Disk: Squid history, normalized events, CVEs, labels, models, and audit history
+- Disk: persistent SQLite database, Squid logs, models, and audit exports
 
 A connected installation can refresh CVE data through an allowlisted outbound-only updater that sends no customer data. An air-gapped installation imports a signed update bundle.
 
