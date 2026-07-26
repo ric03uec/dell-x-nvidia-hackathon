@@ -4,6 +4,7 @@
 set shell := ["bash", "-uc"]
 
 agents_dir := "agents"
+services_dir := "services"
 lib := "libs/agentkit"
 template := "hello-agent"
 gb10 := "dell-gb10"
@@ -73,6 +74,11 @@ each +args="check":
 [group('agent')]
 new name:
     ./scripts/new-agent.sh {{ agents_dir }}/{{ template }} {{ agents_dir }}/{{ name }}
+
+# Run a recipe inside one service project (the polyglot seam, e.g. pnpm): just s dashboard dev
+[group('service')]
+s name +args="check":
+    @just --justfile {{ services_dir }}/{{ name }}/justfile --working-directory {{ services_dir }}/{{ name }} {{ args }}
 
 # Deploy one agent to a Spark: just deploy hello-agent spark.local [--image]
 [group('deploy')]

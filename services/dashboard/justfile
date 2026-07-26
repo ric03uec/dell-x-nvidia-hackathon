@@ -1,0 +1,30 @@
+# services/dashboard — pnpm/TypeScript, deliberately outside the uv workspace
+# (the polyglot seam; see README.md). Driven via the root justfile's
+# `just s dashboard <verb>`, mirroring `just a <name> <verb>` for agents.
+
+set shell := ["bash", "-uc"]
+
+# List available recipes
+[group('project')]
+default:
+    @just --list
+
+# Install dependencies via pnpm
+[group('project')]
+setup:
+    pnpm install
+
+# Start the dev server (port from $DASHBOARD_PORT / docs/ports.md, default 8300)
+[group('project')]
+dev:
+    pnpm run dev
+
+# Typecheck and lint
+[group('project')]
+check:
+    pnpm run check
+
+# Production build
+[group('project')]
+build:
+    pnpm run build
