@@ -1,0 +1,38 @@
+# services/processing — Component 3: refinement and processing. Scaffold
+# only (dxnvh-332.7); live/offline detection and the security agent's logic
+# land in epic dxnvh-0e6.
+
+set shell := ["bash", "-uc"]
+
+# List available recipes
+[group('service')]
+default:
+    @just --list
+
+# Install this project's dependencies into the shared workspace venv
+[group('service')]
+setup:
+    uv sync
+
+# Lint, format-check, and typecheck this project
+[group('service')]
+check:
+    uv run ruff check .
+    uv run ruff format --check .
+    uv run mypy src
+
+# Auto-fix lint and formatting
+[group('service')]
+fmt:
+    uv run ruff check --fix .
+    uv run ruff format .
+
+# Run this project's tests
+[group('service')]
+test:
+    uv run pytest
+
+# Run the processing service's FastAPI app locally (scaffold /health only)
+[group('service')]
+run port=env("PROCESSING_LIVE_PORT", "8200"):
+    uv run uvicorn processing.app:app --port {{ port }} --reload
