@@ -8,7 +8,9 @@
 
 ## 1. What we are building
 
-For the hackathon, **Squid is the main collection and enforcement point**. Test clients use Squid as an explicit web proxy. A local collector streams Squid access logs into a fast anomaly detector. A more powerful GPU model analyzes the complete history offline each night and proposes improvements to the live detector.
+For the hackathon, an **OpenClaw business agent runs inside OpenShell**, with Squid as the first network data source. A local collector streams Squid and OpenShell activity into a fast anomaly detector. A more powerful GPU model analyzes the complete history offline, and an always-on OpenClaw security agent investigates suspicious cross-action sequences using NemoClaw-routed local inference.
+
+The four independent workstreams, contracts, repository layout, and integration milestones are defined in [Modular Hackathon Implementation Plan](./modular-implementation-plan.md).
 
 Additional local context comes from:
 
@@ -22,22 +24,26 @@ CVEs add asset-risk context but do not directly prove exfiltration.
 
 ```mermaid
 flowchart LR
-    CLIENT[Test Clients]
     INTERNET[Test Internet Destination]
 
     subgraph Appliance[Local GB10 Appliance]
-        SQUID[Squid Proxy] --> LOG[Squid access.log]
-        LOG -->|Live tail| COLLECTOR[Log Collector]
+        BUSINESS[OpenClaw Business Agent] --> SHELL[OpenShell Runtime]
+        SHELL --> SQUID[Squid Proxy]
+        SQUID --> LOG[Squid access.log]
+        SHELL --> ACTIONS[OpenShell Action / Audit Events]
+
+        LOG --> COLLECTOR[Source Adapters]
+        ACTIONS --> COLLECTOR
         CVE[CVE + CISA KEV Snapshot] --> ENRICH
         NMAP[Authorized Nmap Scan] --> ENRICH
 
         COLLECTOR --> API[FastAPI Ingestion]
         API --> ENRICH[Normalize + Enrich]
-        ENRICH --> DB[(SQLite)]
+        ENRICH --> DB[(SQLite - Ingestion Only)]
 
         subgraph Online[Online / Live - Seconds]
-            FEATURES[Squid Features]
-            RULES[Rules + Rolling Baselines]
+            FEATURES[Features + Rolling Baselines]
+            RULES[Rules]
             SMALL[Small Isolation Forest]
             SCORE[Risk Score]
         end
@@ -48,30 +54,29 @@ flowchart LR
         RULES --> SCORE
         SMALL --> SCORE
         SCORE --> DB
-        SCORE --> UI[Streamlit Dashboard]
-        SCORE -.-> LITELLM[Local LiteLLM Gateway]
-        LITELLM -->|Live model alias| LLM[Fast Local Explanation Model] --> UI
 
         subgraph Offline[Offline / Nightly - GPU]
-            SNAPSHOT[Historical Snapshot]
-            SEQUENCE[PyTorch Sequence / Autoencoder Model]
-            POWERFUL[Powerful Local Model via LiteLLM]
+            SNAPSHOT[Safe SQLite Snapshot]
+            SEQUENCE[PyTorch Sequence Model]
             EVAL[Replay + Evaluate]
-            APPROVE{Analyst Approval}
         end
 
-        DB -->|Nightly| SNAPSHOT --> SEQUENCE --> LITELLM
-        LITELLM -->|Offline model alias| POWERFUL --> EVAL --> APPROVE
-        APPROVE -->|Thresholds / new small model| SMALL
-        APPROVE -->|Deeper incidents| UI
-        UI -->|Labels| DB
+        DB -->|Nightly| SNAPSHOT --> SEQUENCE --> EVAL
 
-        POLICY[Local Denylist / ACL Policy]
-        UI -->|Approved policy only| POLICY
-        POLICY -.->|Future requests| SQUID
+        SCORE --> SECURITY[Always-On OpenClaw Security Agent]
+        EVAL --> SECURITY
+        SECURITY --> NEMO[NemoClaw Local Inference Route]
+        NEMO --> LOCALMODEL[Local GB10 Models]
+        LOCALMODEL --> FINDING[Finding + Constrained Recommendation]
+        FINDING --> DB
+        DB --> UI[Web Dashboard]
+
+        UI -->|Analyst approval| POLICY[Approved Policy Adapter]
+        POLICY -->|Constrained policy| SHELL
+        POLICY -.->|Optional destination ACL| SQUID
+        SHELL -->|Block result| ACTIONS
     end
 
-    CLIENT -->|Explicit proxy| SQUID
     SQUID --> INTERNET
 ```
 
@@ -86,20 +91,18 @@ Squid normally writes an access-log record during or after a request. Therefore:
 - An approved denylist or Squid external ACL can block later requests before they start.
 - The LLM and powerful offline model must never run inside Squid's request path.
 
-For the hackathon, start in **observe mode**. Demonstrate that an approved policy blocks a repeated request to the same destination.
+For the hackathon, start in **observe mode**. Demonstrate that an analyst-approved, constrained policy is applied by OpenShell and blocks a repeated transfer. Squid ACL enforcement remains an optional second enforcement example.
 
 ## 3. Minimal components
 
-Use one Docker Compose deployment with five runtime services and one embedded database:
+Group the runtime into four independently owned components:
 
-| Component | Hackathon choice | Responsibility |
+| Component | Hackathon technologies | Responsibility |
 |---|---|---|
-| Proxy | Squid | Routes test web traffic and writes access logs |
-| API | FastAPI | Receives events and owns all database writes |
-| Worker/collector | Python | Tails logs, normalizes events, scans, scores, and runs nightly jobs through the API |
-| Embedded database | SQLite | Events, baselines, assets, CVEs, labels, jobs, and model metadata |
-| Dashboard | Streamlit | Alerts, explanations, labels, policy, and model approval |
-| Model service | PyTorch plus local LiteLLM gateway/backends | Offline anomaly model, fast explanation model, and powerful offline model |
+| Infrastructure and sources | Docker Compose, Squid, OpenShell, OpenClaw business agent | Produce source activity and apply approved policy |
+| Ingestion and storage | FastAPI, source adapters, SQLite | Normalize events, own durable data, and expose versioned APIs |
+| Refinement and processing | Python, scikit-learn, PyTorch, OpenClaw security agent, NemoClaw local inference | Live/offline detection, investigation, and constrained recommendations |
+| UX and dashboard | Local web application | Evidence, labels, policy approval, enforcement audit, and model review |
 
 SQLite is sufficient for a single-node hackathon appliance. Enable WAL mode, foreign keys, and a busy timeout. Keep the database on a local GB10 disk, let FastAPI own writes, and have other containers use the API instead of sharing concurrent write access to the SQLite file. Create nightly training snapshots with SQLite's backup API rather than copying an active database file. Do not add Kafka, Kubernetes, a separate feature store, or production endpoint agents during the hackathon.
 
@@ -109,6 +112,9 @@ The architecture uses generic capabilities. The named products are replaceable i
 
 | Generic category | What it does | MVP choice | Other/eventual options |
 |---|---|---|---|
+| Agent runtime and policy sandbox | Runs business-agent actions under enforceable local policy | **OpenShell** | Another constrained local workload runtime |
+| Business automation agent | Performs the normal workflow being protected | **OpenClaw business agent** | Business applications and managed user workflows |
+| Security investigation agent | Correlates evidence and proposes constrained policy | **OpenClaw security agent** | A custom local investigation service |
 | Forward web proxy | Routes and controls user web traffic | **Squid** | Envoy or another enterprise secure web gateway |
 | Proxy content adaptation | Sends approved decrypted HTTP content to a scanner | None for MVP | C-ICAP, custom ICAP, or eCAP service |
 | Log collector/shipper | Tails, buffers, and forwards logs | Python collector | Vector, Fluent Bit, Filebeat, rsyslog |
@@ -125,27 +131,31 @@ The architecture uses generic capabilities. The named products are replaceable i
 | Content/DLP classifier | Detects sensitive data when content is legitimately visible | Simulated sensitivity metadata | YARA, Presidio, Hyperscan, or an ICAP DLP service |
 | Live anomaly detector | Scores each event quickly | scikit-learn Isolation Forest | Gradient-boosted model or distilled neural model |
 | Offline anomaly trainer | Finds deeper historical or sequence anomalies | PyTorch autoencoder | Temporal transformer or graph model |
-| Local model gateway | Gives applications one API for locally hosted models | LiteLLM | Direct backend APIs |
+| Agent inference route | Routes OpenClaw security-agent inference locally | NemoClaw | A versioned internal inference adapter |
+| Local model gateway | Gives applications one API for locally hosted models | Existing LiteLLM endpoint, behind the local route where required | Direct backend APIs |
 | Local inference backend | Executes the models on the GB10 GPU | Existing GB10 local backend | vLLM, llama.cpp, Ollama, or TensorRT-LLM |
 | Analyst dashboard | Displays incidents and captures decisions | Streamlit | React application, Grafana, or SIEM integration |
-| Enforcement point | Applies an approved response | Squid ACL/denylist | Squid external ACL, firewall, DNS filter, or EDR isolation |
+| Enforcement point | Applies an approved response | OpenShell policy adapter; optional Squid ACL | Squid external ACL, firewall, DNS filter, or EDR isolation |
 | Deployment/orchestration | Installs and runs local services | Docker Compose | Kubernetes or an appliance installer |
 
 For the hackathon, the shortest useful chain is:
 
 ```text
-Squid (proxy)
+OpenClaw business agent
+  → OpenShell (agent runtime and policy enforcement)
+  → Squid (proxy)
   → Python collector (log shipper)
   → FastAPI (ingestion)
   → SQLite (embedded event store)
   → Isolation Forest (live anomaly detection)
-  → Streamlit (analyst dashboard)
-  → approved Squid ACL (enforcement)
+  → web dashboard (analyst approval)
+  → approved OpenShell policy (enforcement)
 
 Nightly SQLite snapshot
   → PyTorch (offline anomaly detection)
-  → LiteLLM (local model gateway)
-  → powerful local model (correlation and explanation)
+  → OpenClaw security agent
+  → NemoClaw (local inference route)
+  → local GB10 model (correlation and recommendation)
 ```
 
 ## 4. Squid live ingestion
@@ -286,12 +296,12 @@ The helper may check only cached, deterministic policy such as a denied destinat
 
 ## 8. Powerful offline model on the GB10
 
-Each night, the GB10 runs a two-stage offline analysis over the local Squid history:
+Each night, the GB10 runs a two-stage offline analysis over the local event history:
 
-1. A **PyTorch autoencoder** processes numerical time-window and sequence features.
-2. A **powerful local model accessed through LiteLLM** correlates the structured findings, CVE context, and analyst labels.
+1. A **PyTorch autoencoder** processes numerical time-window and cross-action sequence features.
+2. The **OpenClaw security agent** investigates structured findings using NemoClaw-routed local inference and a powerful model hosted on the GB10.
 
-A temporal anomaly model can replace or extend the autoencoder after the MVP. LiteLLM provides the OpenAI-compatible gateway; all configured inference backends remain on the GB10.
+A temporal anomaly model can replace or extend the autoencoder after the MVP. The existing LiteLLM endpoint may remain as the local model-provider adapter behind this boundary, but processing code depends only on the NemoClaw/local-inference contract. All inference remains on the GB10.
 
 The offline pipeline can analyze:
 
@@ -309,7 +319,7 @@ It produces:
 - Recommended live thresholds
 - Teacher-generated labels or a candidate small model
 
-The offline models also support on-demand investigation. They are powerful but do not need to meet Squid request latency. The PyTorch model handles numerical anomaly detection; the powerful model behind LiteLLM handles correlation and structured reasoning.
+The offline models also support on-demand investigation. They are powerful but do not need to meet Squid request latency. The PyTorch model handles numerical anomaly detection; the OpenClaw security agent and NemoClaw-routed model handle correlation and structured reasoning.
 
 ### Safe learning loop
 
@@ -320,8 +330,9 @@ flowchart LR
     LIVE --> REVIEW[Analyst Review]
     REVIEW -->|Labels| STORE
     STORE -->|Nightly snapshot| GPU[PyTorch Sequence Model]
-    GPU --> LITELLM[LiteLLM to Powerful Local Model]
-    LITELLM --> TEST[Replay + Evaluate]
+    GPU --> SECURITY[OpenClaw Security Agent]
+    SECURITY --> NEMO[NemoClaw to Powerful Local Model]
+    NEMO --> TEST[Replay + Evaluate]
     TEST --> GATE{Better and Safe?}
     GATE -->|Approve| VERSION[Versioned Candidate]
     VERSION --> DEPLOY[Update Small Model / Thresholds]
@@ -330,48 +341,38 @@ flowchart LR
 
 Do not train on unresolved high-risk events as if they were normal. Every promoted model is versioned and supports rollback.
 
-## 9. Local LiteLLM model gateway
+## 9. OpenClaw security agent and local inference
 
-LiteLLM is the single OpenAI-compatible gateway for models hosted locally on the GB10. Configure at least two aliases:
+The always-on OpenClaw security agent owns investigation orchestration. It receives structured evidence from live and offline detectors, then uses **NemoClaw-routed inference that terminates at models hosted locally on the GB10**.
 
-```text
-exfil-live     -> fast local model for asynchronous explanations
-exfil-offline  -> powerful local model for nightly correlation and investigation
-```
+The existing LiteLLM endpoint can remain an implementation detail behind the local inference adapter if required. Other components must not depend directly on a specific model server. This keeps the processing module independently testable with a mocked inference response.
 
-Application configuration can use:
+The security agent:
 
-```text
-LITELLM_BASE_URL=http://litellm:4000/v1
-LIVE_MODEL=exfil-live
-OFFLINE_MODEL=exfil-offline
-```
-
-The live alias receives structured evidence after scoring and:
-
-- Explains why a Squid event was flagged.
-- Summarizes a user's related proxy activity.
+- Correlates Squid and OpenShell actions into a timeline.
+- Explains why a cross-action sequence was flagged.
 - Adds relevant CVE/KEV context.
-- Suggests investigation steps.
+- Produces a schema-validated finding.
+- Suggests one constrained policy action for analyst review.
 
-The offline alias receives larger, historical batches of structured findings and performs deeper correlation. Neither model modifies Squid policy directly.
+It cannot modify Squid or OpenShell directly. It cannot produce executable shell commands. Its recommendation must use an allowlisted action such as `deny_destination`, include a target and scope, and pass explicit analyst approval.
 
-LiteLLM must listen only on the private container network, require an internal API key, and have no external-provider fallback. Prompts and responses remain local. Squid logs, URLs, CVE text, and report content are untrusted data, not model instructions.
+NemoClaw and any local model gateway must listen only on private GB10 interfaces, authenticate internal callers, and have no external-provider fallback. Prompts and responses remain local. Squid logs, URLs, CVE text, and report content are untrusted data, not model instructions.
 
 ## 10. Hackathon demo
 
-1. Start Docker Compose on the GB10.
-2. Configure one test client or `curl` to use Squid.
-3. Load a local CVE/NVD sample and CISA KEV snapshot.
-4. Run Nmap against one authorized test subnet and associate a test asset with a KEV.
-5. Generate several normal requests through Squid.
-6. Send a large, off-hours test upload to a new destination through Squid.
-7. Stream the Squid log into FastAPI and score it immediately.
-8. Show the risk evidence and local-LLM explanation in Streamlit.
-9. Label the event and trigger the nightly GPU job manually.
-10. Show the powerful model's deeper result and candidate threshold/model.
-11. Approve the candidate or roll it back.
-12. Approve the suspicious destination for the denylist, repeat the request, and show Squid blocking it.
+1. Start all local services on the GB10.
+2. Run an OpenClaw business agent inside OpenShell.
+3. Let the business agent perform a normal workflow through Squid.
+4. Ingest and normalize the Squid and OpenShell events into SQLite.
+5. Run a suspicious cross-action sequence ending in a test transfer.
+6. Detect it with the live rules/model and optionally trigger the offline job manually.
+7. Let the always-on OpenClaw security agent investigate using NemoClaw-routed local inference.
+8. Show deterministic evidence, the local investigation, and a constrained recommendation in the web dashboard.
+9. Have an analyst explicitly approve the policy.
+10. Apply it through the OpenShell policy adapter.
+11. Repeat the transfer and show OpenShell blocking it.
+12. Show the enforcement audit event and prove that no customer data, telemetry, or inference left the GB10.
 
 ## 11. Installation on the GB10
 
@@ -379,51 +380,56 @@ LiteLLM must listen only on the private container network, require an internal A
 2. Verify GPU access with `nvidia-smi`.
 3. Check `uname -m`; use `linux/arm64` images if the Grace-based host requires them.
 4. Download models once and store them locally on the GB10.
-5. Configure LiteLLM with local-only `exfil-live` and `exfil-offline` model aliases; do not configure external-provider fallbacks.
-6. Start Squid, FastAPI with SQLite, the worker, Streamlit, LiteLLM, and the local inference backends.
+5. Configure OpenShell, the OpenClaw business/security agents, and NemoClaw-routed local inference with no external-provider fallback.
+6. Start Squid, FastAPI with SQLite, processing, the web dashboard, NemoClaw, and the local inference backends.
 7. Store the SQLite file on a persistent local volume and enable WAL mode, foreign keys, and a busy timeout.
 8. Bind-mount the Squid log directory read-only into the worker.
 9. Load the CVE/KEV snapshot and configure one authorized scan range.
-10. Expose port 3128 only to test clients, restrict the dashboard to the management network, and keep LiteLLM private to the container network.
+10. Expose port 3128 only to test clients, restrict the dashboard to the management network, and keep NemoClaw/model endpoints private to the GB10 network.
 
 Suggested resource allocation:
 
 - CPU: Squid, API/SQLite, collector, rules, and small live model
-- GPU: PyTorch offline model and the local models routed through LiteLLM
+- GPU: PyTorch offline model and local models routed through NemoClaw
 - Disk: persistent SQLite database, Squid logs, models, and audit exports
 
 A connected installation can refresh CVE data through an allowlisted outbound-only updater that sends no customer data. An air-gapped installation imports a signed update bundle.
 
-## 12. Four-person split
+## 12. Four independent components
 
-### Member 1 — Squid and live collection
+### Component 1 — Infrastructure and sources
 
-- Squid container and explicit-proxy configuration
-- Structured log format and collector
-- Test traffic and upload generator
-- Denylist/reload integration
+- Docker Compose and GB10 runtime
+- Squid now; Zeek and other sensors through adapters later
+- OpenShell and the OpenClaw business-agent workflow
+- Deterministic demo traffic and raw event fixtures
+- Constrained OpenShell/Squid policy enforcement adapter
 
-### Member 2 — Processing and live detection
+### Component 2 — Ingestion and storage
 
-- FastAPI ingestion and normalized event schema
-- Rolling baselines and feature extraction
-- Rules, Isolation Forest, and risk score
-- CVE/Nmap enrichment
+- Squid and OpenShell source adapters
+- FastAPI ingestion and versioned canonical-event schema
+- Validation, normalization, and deduplication
+- Exclusive ownership of SQLite, migrations, and snapshot API
+- Data/query APIs for processing, dashboard, and infrastructure
 
-### Member 3 — Powerful offline model
+### Component 3 — Refinement and processing
 
-- PyTorch autoencoder and nightly job
-- Historical windows and training exclusions
-- Evaluation, model versions, promotion, and rollback
-- Optional teacher-to-small-model update
+- Live feature extraction, baselines, rules, and Isolation Forest
+- Offline PyTorch sequence/autoencoder model
+- Always-on OpenClaw security agent
+- NemoClaw-routed local inference
+- Findings, constrained recommendations, evaluation, and model versions
 
-### Member 4 — Dashboard, LLM, and GB10 deployment
+### Component 4 — UX and dashboard
 
-- Streamlit alerts and analyst labels
-- LiteLLM integration and local model aliases
-- Local model explanations
-- Policy and model approval screens
-- Docker Compose and GB10 GPU setup
+- Local web dashboard and service status
+- Cross-action incident timeline and deterministic evidence
+- Security-agent investigation summary
+- Analyst labels and explicit policy approval
+- Enforcement audit, model comparison, and rollback controls
+
+Components communicate only through versioned contracts. SQLite is private to ingestion, model output is schema validated, and only predefined analyst-approved actions reach infrastructure. See the [modular implementation plan](./modular-implementation-plan.md) for APIs, fixtures, ownership, branches, milestones, and acceptance tests.
 
 ## 13. Eventual business architecture
 
@@ -444,7 +450,7 @@ flowchart TB
         SQLOG[Squid Live Logs]
         AGENTS[Signed Endpoint Agents\nFile + Process + User]
         NETWORK[Zeek / NetFlow / DNS\nProxy-Bypass Visibility]
-        SECURITY[Firewall / VPN / EDR / DLP / SIEM]
+        SECURITYLOGS[Firewall / VPN / EDR / DLP / SIEM]
         BUSINESS[File Server / NAS / Email Audit]
         ASSETS[Asset Inventory / Identity / Nmap]
         VULN[CVE / NVD / CISA KEV / Vendor Advisories]
@@ -463,7 +469,7 @@ flowchart TB
     SQLOG --> CONNECTORS
     AGENTS --> CONNECTORS
     NETWORK --> CONNECTORS
-    SECURITY --> CONNECTORS
+    SECURITYLOGS --> CONNECTORS
     BUSINESS --> CONNECTORS
     ASSETS --> CONNECTORS
     VULN --> CONNECTORS
@@ -498,7 +504,8 @@ flowchart TB
     subgraph Offline[Offline / Nightly GB10 Intelligence]
         DATASET[Approved Historical Snapshot]
         DEEP[Powerful Temporal / Graph Anomaly Model]
-        LITELLM[Local LiteLLM Gateway]
+        AGENTSEC[OpenClaw Security Agent]
+        NEMO[NemoClaw Local Inference Route]
         REASON[Powerful Local Reasoning Model]
         EVALUATE[Replay + Evaluate + Calibrate]
         GATE{Analyst Approval}
@@ -506,22 +513,26 @@ flowchart TB
 
     HISTORY --> DATASET
     FEATURESTORE --> DATASET
-    DATASET --> DEEP --> LITELLM --> REASON --> EVALUATE --> GATE
+    DATASET --> DEEP --> AGENTSEC --> NEMO --> REASON --> EVALUATE --> GATE
     GATE -->|Promote / rollback| REGISTRY
     REGISTRY -->|Versioned update| SMALL
     GATE -->|Approved rules / thresholds| RULES
 
     subgraph Response[Response and Investigation]
         DASHBOARD[Local Analyst Dashboard]
-        EXPLAIN[Fast Local Explanation Model via LiteLLM]
+        EXPLAIN[Fast Local Explanation Model]
+        OPENSHELL[OpenShell Policy Enforcement]
         ENFORCE[Squid / Firewall / EDR Enforcement]
     end
 
     RISK --> DASHBOARD
-    RISK -.->|Structured evidence| LITELLM
-    LITELLM -->|Live alias| EXPLAIN --> DASHBOARD
+    RISK -.->|Structured evidence| AGENTSEC
+    AGENTSEC --> NEMO
+    NEMO -->|Fast local model| EXPLAIN --> DASHBOARD
     RISK --> ENFORCE
+    DASHBOARD -->|Approved policy| OPENSHELL
     DASHBOARD -->|Approved action| ENFORCE
+    OPENSHELL -->|Enforcement result| AUDIT
     ENFORCE --> SQUID
     DASHBOARD -->|Labels + exclusions| HISTORY
 ```
@@ -530,7 +541,7 @@ flowchart TB
 
 1. The **small live model** scores every event quickly using current features and approved nightly updates.
 2. The **powerful temporal/graph model** finds slow or cross-entity patterns over the complete local history.
-3. The **powerful model behind LiteLLM** correlates structured findings and creates investigation summaries.
+3. The **OpenClaw security agent using NemoClaw-routed local inference** correlates structured findings and creates investigation summaries and constrained recommendations.
 4. Replay and evaluation determine whether a candidate improves detection without exceeding the alert budget.
 5. An analyst approves new model versions, thresholds, and rules before they enter the live path.
 6. The dashboard can approve enforcement through Squid, a firewall, or EDR; no generative model enforces directly.
@@ -539,4 +550,4 @@ Production additions include high availability, RBAC, encrypted backups, retenti
 
 ## 14. Definition of success
 
-> A test upload passes through Squid, its log is scored locally within seconds, and the alert is explained in the dashboard. The powerful GB10 model later analyzes the broader history and proposes a reviewed improvement. An analyst can approve a policy that causes Squid to block the next matching request, with no customer telemetry leaving the appliance.
+> A locally running OpenClaw business agent performs normal work inside OpenShell. A suspicious cross-action sequence is detected locally, an always-on OpenClaw security agent investigates it using NemoClaw-routed local inference, an analyst approves the recommended policy, and OpenShell blocks the repeated transfer. No customer data, telemetry, or inference leaves the GB10.
