@@ -1,0 +1,29 @@
+# Dashboard dev server (component 4). Runs `vite` (not build+preview) so
+# vite.config.ts's dev-only server.proxy for /api stays live. Build context
+# is the repo root so this can COPY services/*.
+#
+# node:20-slim (package.json's stated floor) fails here: the pinned
+# packageManager pnpm@11.17.0 requires Node >=22.13 at runtime, verified by
+# smoke-testing the build. node:22-slim is still an official multi-arch
+# image publishing linux/arm64.
+FROM node:22-slim
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.revision=$GIT_SHA
+
+RUN corepack enable
+WORKDIR /app
+
+COPY services/dashboard/package.json services/dashboard/pnpm-lock.yaml ./
+# pnpm >=10's default: dependency postinstall scripts (esbuild's, here) are
+# ignored unless approved. Container-local config, not a change to the
+# tracked pnpm-workspace.yaml/.npmrc under services/dashboard.
+RUN pnpm config set dangerously-allow-all-builds true
+RUN pnpm install --frozen-lockfile
+
+COPY services/dashboard/ ./
+
+EXPOSE 8300
+# No literal "--" before the forwarded flags: pnpm (unlike npm) passes it
+# through to vite's CLI verbatim, which then stops parsing flags and the
+# --host override is silently dropped (verified by smoke test).
+CMD ["pnpm", "run", "dev", "--host", "0.0.0.0", "--port", "8300"]

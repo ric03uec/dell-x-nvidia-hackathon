@@ -1,0 +1,66 @@
+# Application stack (ingestion, processing-live, dashboard) — dxnvh-332.12.
+#
+# Own project name so `docker compose down` here can never sweep up the
+# separately-managed inference stack (docker-compose.large-qwen.yml,
+# docker-compose.litellm.yml) — those are untouched by this file.
+#
+# Run via `just gb10-app-up` (--project-directory . at the repo root), so
+# compose reads .env from there per .env.example. Build context below is "."
+# — relative to --project-directory, not to this file's own directory — and
+# --project-directory . is the repo root, so each Dockerfile can COPY
+# services/*.
+name: hack-app
+
+services:
+  ingestion:
+    container_name: hack-ingestion
+    build:
+      context: .
+      dockerfile: infra/gb10/Dockerfile.ingestion
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+    ports:
+      - "${MGMT_BIND_ADDR:-127.0.0.1}:${INGESTION_PORT:-8100}:8100"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8100/health',timeout=2).status==200 else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  processing-live:
+    container_name: hack-processing-live
+    build:
+      context: .
+      dockerfile: infra/gb10/Dockerfile.processing
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+    ports:
+      - "${PRIVATE_BIND_ADDR:-127.0.0.1}:${PROCESSING_LIVE_PORT:-8200}:8200"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8200/health',timeout=2).status==200 else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  dashboard:
+    container_name: hack-dashboard
+    build:
+      context: .
+      dockerfile: infra/gb10/Dockerfile.dashboard
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+    environment:
+      # Docker Compose DNS name for the ingestion service, not
+      # .env.example's 127.0.0.1 default (which would resolve to this
+      # container's own loopback instead of the ingestion container).
+      DASHBOARD_API_TARGET: http://ingestion:8100
+    ports:
+      - "${MGMT_BIND_ADDR:-127.0.0.1}:${DASHBOARD_PORT:-8300}:8300"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8300/',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
