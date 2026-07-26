@@ -3,9 +3,12 @@
 # to be an installable package itself.
 [tool.uv.workspace]
 members = ["libs/*", "services/*", "agents/*"]
-# Non-Python asset directories that happen to live under libs/* (policy docs,
-# shared markdown skills) — not uv projects, so exclude them explicitly.
-exclude = ["libs/policies", "libs/skills"]
+# Non-Python directories caught by the globs above. The asset dirs under libs/*
+# (policy docs, shared markdown skills) are not uv projects. services/dashboard
+# is the deliberate polyglot seam — TypeScript/React on pnpm, reached through the
+# same root verbs but never a workspace member, so it has no pyproject.toml for
+# uv to find. Any future non-Python component under services/* belongs here too.
+exclude = ["libs/policies", "libs/skills", "services/dashboard"]
 
 # Shared lint/type/test config for every workspace member. Kept here, not
 # per-member, so owners can't silently diverge on rules and cause
