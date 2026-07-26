@@ -1,0 +1,5 @@
+# uv.lock is machine-generated and uv ships no merge driver for it, so a
+# textual 3-way merge is never correct here. Unsetting `merge` stops git
+# embedding <<<<<<< conflict markers inside the file on a real conflict —
+# see `just relock` and the "uv.lock conflicts" section in CLAUDE.md.
+uv.lock -merge

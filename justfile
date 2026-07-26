@@ -38,6 +38,15 @@ test:
 doctor host="":
     ./scripts/doctor.sh {{ host }}
 
+# Resolve a conflicted uv.lock by taking one side and regenerating it from
+# the (already-merged) pyproject.tomls — never hand-edit uv.lock.
+# Run after a merge/rebase leaves uv.lock conflicted: just relock [ours|theirs]
+[group('workspace')]
+relock side="ours":
+    git checkout --{{ side }} -- uv.lock
+    uv lock
+    git add uv.lock
+
 # Run a recipe inside one agent project: just a hello-agent test
 [group('agent')]
 a name +args="check":
