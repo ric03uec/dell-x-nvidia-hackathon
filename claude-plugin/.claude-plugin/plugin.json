@@ -1,0 +1,6 @@
+{
+  "name": "nemoclaw-lessons",
+  "version": "0.1.0",
+  "description": "NemoClaw/OpenShell operating skills learned from GB10 hackathon trial runs: fan-out limits, per-agent data boundaries, egress audit, and local inference routing.",
+  "keywords": ["nemoclaw", "openshell", "openclaw", "gb10", "sandbox"]
+}
