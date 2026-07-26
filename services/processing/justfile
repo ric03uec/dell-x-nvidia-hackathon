@@ -1,38 +1,33 @@
-# services/processing — Component 3: refinement and processing. Scaffold
-# only (dxnvh-332.7); live/offline detection and the security agent's logic
-# land in epic dxnvh-0e6.
-
 set shell := ["bash", "-uc"]
 
-# List available recipes
-[group('service')]
-default:
-    @just --list
-
-# Install this project's dependencies into the shared workspace venv
-[group('service')]
+[group('processing')]
 setup:
     uv sync
 
-# Lint, format-check, and typecheck this project
-[group('service')]
+[group('processing')]
 check:
     uv run ruff check .
     uv run ruff format --check .
     uv run mypy src
 
-# Auto-fix lint and formatting
-[group('service')]
-fmt:
-    uv run ruff check --fix .
-    uv run ruff format .
-
-# Run this project's tests
-[group('service')]
+[group('processing')]
 test:
     uv run pytest
 
-# Run the processing service's FastAPI app locally (scaffold /health only)
-[group('service')]
-run port=env("PROCESSING_LIVE_PORT", "8200"):
-    uv run uvicorn processing.app:app --port {{ port }} --reload
+[group('processing')]
+generate data="synthetic-data":
+    uv run squidward-process generate-synthetic \
+      --normal-fixture ../../fixtures/expected/normal.json \
+      --suspicious-fixture ../../fixtures/expected/suspicious.json \
+      --output-dir {{ data }}
+
+[group('processing')]
+train data="synthetic-data" artifacts="artifacts": (generate data)
+    uv run --extra offline squidward-process train-bundle \
+      --dataset-dir {{ data }} --artifact-dir {{ artifacts }}
+
+[group('processing')]
+demo model="artifacts/registry/isolation-forest-001.pkl":
+    uv run squidward-process detect \
+      --events ../../fixtures/expected/suspicious.json \
+      --baseline ../../fixtures/expected/normal.json --model {{ model }}

@@ -1,39 +1,26 @@
-# services/ingestion — component 2 home (FastAPI). Scaffold only: schema,
-# adapters, and the real API surface land in epic 2. Driven via the root
-# justfile's `just s ingestion <verb>`, mirroring `just a <name> <verb>` for
-# agents. Port is the one assigned in docs/ports.md (8100).
+# services/ingestion — REST + MCP + the rules surface Squid reads.
+# Root verbs: just s ingestion check | just s ingestion test | just s ingestion run
 
 set shell := ["bash", "-uc"]
 
 # List available recipes
-[group('project')]
 default:
     @just --list
 
-# Install this project's dependencies into its own venv
-[group('project')]
+# Sync this member's dependencies
 setup:
-    uv sync
+    uv sync --project .
 
-# Lint, format-check, and typecheck this project
-[group('project')]
+# Lint, format-check and typecheck
 check:
-    uv run ruff check .
-    uv run ruff format --check .
-    uv run mypy src
+    uv run --project . ruff check src tests
+    uv run --project . ruff format --check src tests
+    uv run --project . mypy src
 
-# Auto-fix lint and formatting
-[group('project')]
-fmt:
-    uv run ruff check --fix .
-    uv run ruff format .
-
-# Run this project's tests
-[group('project')]
+# Run the tests
 test:
-    uv run pytest
+    uv run --project . pytest tests -q
 
-# Run the ingestion API locally on the port assigned in docs/ports.md
-[group('project')]
-run port=env("INGESTION_PORT", "8100"):
-    uv run uvicorn ingestion.app:app --port {{ port }} --reload
+# Serve locally. Port 8100 per docs/ports.md — that file is the table of record.
+run port="8100" db="./events.db":
+    INGESTION_DB={{ db }} uv run --project . uvicorn ingestion.app:app --host 127.0.0.1 --port {{ port }}

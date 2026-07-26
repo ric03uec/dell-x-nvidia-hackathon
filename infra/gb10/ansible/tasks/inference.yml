@@ -1,0 +1,65 @@
+---
+- name: Probe vLLM
+  ansible.builtin.uri:
+    url: http://127.0.0.1:8000/v1/models
+    return_content: true
+    status_code: 200
+    timeout: 15
+  register: vllm_probe
+  failed_when: false
+  changed_when: false
+
+- name: Start the existing vLLM stack when unavailable
+  ansible.builtin.command:
+    argv:
+      - "{{ vllm_wrapper }}"
+      - start
+      - qwen36
+  when:
+    - inference_repair | default(false) | bool
+    - vllm_probe.status | default(0) != 200
+  changed_when: true
+
+- name: Probe authenticated LiteLLM
+  ansible.builtin.shell: |
+    set -euo pipefail
+    source {{ litellm_env_file | quote }}
+    curl --fail --silent --show-error --max-time 15 \
+      -H "Authorization: Bearer ${LITELLM_MASTER_KEY}" \
+      http://127.0.0.1:4000/v1/models
+  args:
+    executable: /bin/bash
+  register: litellm_probe
+  failed_when: false
+  changed_when: false
+  no_log: true
+
+- name: Start the existing LiteLLM stack when unavailable
+  ansible.builtin.command:
+    argv:
+      - "{{ litellm_wrapper }}"
+      - start
+      - qwen36
+  when:
+    - inference_repair | default(false) | bool
+    - litellm_probe.rc != 0
+  changed_when: true
+
+- name: Recheck authenticated LiteLLM
+  ansible.builtin.shell: |
+    set -euo pipefail
+    source {{ litellm_env_file | quote }}
+    curl --fail --silent --show-error --max-time 30 \
+      -H "Authorization: Bearer ${LITELLM_MASTER_KEY}" \
+      http://127.0.0.1:4000/v1/models
+  args:
+    executable: /bin/bash
+  register: litellm_models
+  changed_when: false
+  no_log: true
+
+- name: Confirm the expected LiteLLM virtual model
+  ansible.builtin.assert:
+    that:
+      - openclaw_model in (litellm_models.stdout | from_json).data | map(attribute='id') | list
+    fail_msg: "LiteLLM does not advertise {{ openclaw_model }}"

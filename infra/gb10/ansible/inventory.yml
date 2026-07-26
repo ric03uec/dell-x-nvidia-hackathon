@@ -1,0 +1,7 @@
+all:
+  children:
+    gb10:
+      hosts:
+        hack:
+          ansible_host: hack
+          ansible_user: dell

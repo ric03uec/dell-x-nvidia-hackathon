@@ -2,7 +2,46 @@ from __future__ import annotations
 
 import unittest
 
-from mock_api import FINDING_ID, MockApi, RECOMMENDATION_ID
+from mock_api import FINDING_ID, RECOMMENDATION_ID, LiteLLMClient, MockApi
+
+
+class FakeInferenceClient:
+    model = "Qwen3.6-27B-FP8"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def status(self) -> dict:
+        return {
+            "status": "healthy",
+            "advertised_model": self.model,
+            "loaded_model": self.model,
+            "route_match": True,
+        }
+
+    def investigate(self, finding: dict) -> dict:
+        self.calls += 1
+        return {
+            "schema_version": "1.0",
+            "status": "completed",
+            "summary": f"Investigated {finding['finding_id']} locally.",
+            "served_model": self.model,
+            "route": "litellm-local",
+        }
+
+
+class FakeGpuCollector:
+    def collect(self) -> dict:
+        return {
+            "status": "healthy",
+            "utilization_percent": 42,
+            "memory_used_bytes": 24_000_000_000,
+            "memory_total_bytes": 120_000_000_000,
+            "memory_scope": "unified",
+            "gpu_present": True,
+            "source": "test",
+            "observed_at": "2026-07-26T14:00:00Z",
+        }
 
 
 class MockApiTests(unittest.TestCase):
@@ -21,11 +60,21 @@ class MockApiTests(unittest.TestCase):
         status, finding_response = api.get(f"/v1/findings/{FINDING_ID}")
         self.assertEqual(status, 200)
         finding = finding_response["finding"]
-        self.assertEqual(finding["investigation_status"], "completed")
-        self.assertEqual(
-            finding["event_ids"], [f"evt-{index:03d}" for index in range(16, 23)]
-        )
+        self.assertEqual(finding["investigation_status"], "unavailable")
+        self.assertEqual(finding["event_ids"], [f"evt-{index:03d}" for index in range(16, 23)])
         self.assertEqual(finding["recommendation_ids"], [RECOMMENDATION_ID])
+
+    def test_recommendation_uses_frozen_target_and_scope_fields(self) -> None:
+        api = MockApi()
+        status, response = api.get("/v1/recommendations")
+        self.assertEqual(status, 200)
+        recommendation = response["recommendations"][0]
+        self.assertEqual(recommendation["action_type"], "deny_destination")
+        self.assertEqual(recommendation["target"], "new-receiver.demo.local")
+        self.assertEqual(recommendation["scope"], "business-agent")
+        self.assertIn("expires_at", recommendation)
+        self.assertNotIn("destination", recommendation)
+        self.assertNotIn("constraints", recommendation)
 
     def test_approved_decision_is_idempotent_and_creates_ordered_results(self) -> None:
         api = MockApi()
@@ -46,9 +95,7 @@ class MockApiTests(unittest.TestCase):
             [("applied", "evt-025"), ("block_observed", "evt-026")],
         )
 
-        conflict_status, conflict = api.decide(
-            {"schema_version": "1.0", "decision": "rejected"}
-        )
+        conflict_status, conflict = api.decide({"schema_version": "1.0", "decision": "rejected"})
         self.assertEqual(conflict_status, 409)
         self.assertEqual(conflict["decision"]["decision"], "approved")
 
@@ -62,12 +109,92 @@ class MockApiTests(unittest.TestCase):
         status, enforcement = api.get("/v1/enforcement-results")
         self.assertEqual((status, enforcement["enforcement_results"]), (200, []))
 
+    def test_pipeline_mode_accepts_events_findings_and_recommendations(self) -> None:
+        api = MockApi(pipeline_mode=True)
+        event = {
+            "schema_version": "1.0",
+            "event_id": "evt-pipeline-001",
+            "timestamp": "2026-07-26T14:00:00Z",
+            "source_type": "mitmproxy",
+            "actor": "business-agent",
+            "action": "http_post",
+            "destination": "receiver.demo.local",
+            "request_bytes": 25_000_000,
+            "attributes": {},
+        }
+        finding = {
+            "schema_version": "1.0",
+            "finding_id": "finding-pipeline-001",
+            "event_ids": [event["event_id"]],
+            "risk_score": 95,
+            "severity": "critical",
+            "detectors": ["large_transfer"],
+            "summary": "Synthetic suspicious transfer.",
+            "evidence": [
+                {
+                    "detector": "large_transfer",
+                    "points": 25,
+                    "description": "Large outbound transfer.",
+                }
+            ],
+        }
+        recommendation = {
+            "schema_version": "1.0",
+            "recommendation_id": "rec-pipeline-001",
+            "finding_id": finding["finding_id"],
+            "action_type": "deny_destination",
+            "target": "receiver.demo.local",
+            "scope": "business-agent",
+            "reason": "Synthetic evidence exceeded the threshold.",
+            "expires_at": "2026-07-27T14:00:00Z",
+        }
+
+        self.assertEqual(api.ingest_event(event)[0], 201)
+        self.assertEqual(api.ingest_event(event)[0], 201)
+        self.assertEqual(api.store_finding(finding)[0], 201)
+        self.assertEqual(api.store_recommendation(recommendation)[0], 201)
+
+        _, events = api.get("/v1/events")
+        self.assertEqual(events["count"], 1)
+        self.assertEqual(events["events"][0]["finding_id"], finding["finding_id"])
+        _, findings = api.get(f"/v1/findings/{finding['finding_id']}")
+        self.assertEqual(findings["finding"]["timeline"][0]["event_id"], event["event_id"])
+        _, recommendations = api.get("/v1/recommendations")
+        self.assertEqual(recommendations["recommendations"][0]["target"], "receiver.demo.local")
+
     def test_invalid_decisions_return_json_errors(self) -> None:
         api = MockApi()
         status, response = api.decide({"schema_version": "2.0", "decision": "approved"})
         self.assertEqual(status, 400)
         self.assertEqual(response["schema_version"], "1.0")
         self.assertEqual(response["error"]["code"], "invalid_schema_version")
+
+    def test_local_investigation_is_separate_and_cached(self) -> None:
+        client = FakeInferenceClient()
+        api = MockApi(client, FakeGpuCollector())
+
+        _, before = api.get(f"/v1/findings/{FINDING_ID}")
+        self.assertEqual(before["finding"]["investigation"]["status"], "pending")
+
+        first_status, first = api.investigate()
+        second_status, second = api.investigate()
+        self.assertEqual((first_status, second_status), (200, 200))
+        self.assertEqual(first["investigation"], second["investigation"])
+        self.assertEqual(first["investigation"]["served_model"], client.model)
+        self.assertEqual(client.calls, 1)
+
+        _, system = api.get("/v1/system-status")
+        self.assertEqual(system["status"], "operational")
+        self.assertTrue(system["model"]["route_match"])
+        self.assertEqual(system["appliance"]["gpu"]["utilization_percent"], 42)
+
+    def test_litellm_ui_url_is_normalized_to_api_base(self) -> None:
+        client = LiteLLMClient(
+            "http://172.16.10.127:4000/ui/?page=api-keys",
+            "not-a-real-key",
+            "Qwen3.6-27B-FP8",
+        )
+        self.assertEqual(client.base_url, "http://172.16.10.127:4000")
 
 
 if __name__ == "__main__":

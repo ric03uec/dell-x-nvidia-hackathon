@@ -1,15 +1,218 @@
+"""Both surfaces, one store — the tests exist mostly to prove they agree.
+
+No live Squid, no agent runtime, no network: fixtures only.
+"""
+
+from __future__ import annotations
+
+import os
+import tempfile
+from collections.abc import Iterator
+from typing import Any
+
+import pytest
 from fastapi.testclient import TestClient
 
-from ingestion.app import app
+# The app opens its database at import time, so the env var has to be set first.
+_tmpdir = tempfile.mkdtemp()
+os.environ["INGESTION_DB"] = os.path.join(_tmpdir, "test.db")
+
+from ingestion import store  # noqa: E402
+from ingestion.app import app, conn, mcp  # noqa: E402
+
+SQUID_EVENT: dict[str, Any] = {
+    "ts": 1785107042.961,
+    "src": "172.20.0.1",
+    "method": "CONNECT",
+    "uri": "evil.test:443",
+    "status": 200,
+    "req_bytes": 101326,
+    "resp_bytes": 105727,
+    "result": "TCP_TUNNEL",
+    "dst_ip": "13.223.23.68",
+}
 
 
-def test_health_returns_200_ok() -> None:
-    # Arrange
-    client = TestClient(app)
+@pytest.fixture(autouse=True)
+def clean_db() -> Iterator[None]:
+    for table in ("events", "findings", "recommendations", "rules"):
+        conn.execute(f"DELETE FROM {table}")
+    conn.commit()
+    yield
 
-    # Act
-    response = client.get("/health")
 
-    # Assert
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+@pytest.fixture
+def client() -> Iterator[TestClient]:
+    # Entering the context manager runs the lifespan. If app were built without
+    # mcp_app.lifespan, the MCP session manager would never initialise — see
+    # test_mcp_endpoint_is_mounted_with_lifespan.
+    with TestClient(app) as c:
+        yield c
+
+
+def test_health_reports_database_reachability(client: TestClient) -> None:
+    body = client.get("/health").json()
+    assert body["status"] == "ok"
+    assert body["database"] is True
+    assert body["schema_version"] == "1.0"
+
+
+def test_every_rest_response_is_versioned(client: TestClient) -> None:
+    # services/dashboard/src/api/client.js throws on any payload without this.
+    for path in ("/health", "/v1/events", "/v1/rules", "/v1/recommendations"):
+        assert client.get(path).json()["schema_version"] == "1.0"
+
+
+def test_post_then_get_events(client: TestClient) -> None:
+    posted = client.post("/v1/events", json=[SQUID_EVENT])
+    assert posted.status_code == 201
+    assert posted.json()["accepted"] == 1
+
+    events = client.get("/v1/events").json()["events"]
+    assert len(events) == 1
+    # `uri` of a CONNECT reduces to the destination the rules key on.
+    assert events[0]["destination"] == "evil.test:443"
+    assert events[0]["req_bytes"] == 101326
+
+
+def test_unknown_fields_are_preserved_not_rejected(client: TestClient) -> None:
+    # The exfilguard field set is provisional until dxnvh-332.2 freezes it.
+    client.post("/v1/events", json=[{**SQUID_EVENT, "future_field": "keep me"}])
+    raw = client.get("/v1/events").json()["events"][0]["raw"]
+    assert "future_field" in raw
+
+
+# --- the path that actually enforces ------------------------------------
+
+
+def test_recommendation_only_becomes_a_rule_after_approval(client: TestClient) -> None:
+    rec_id = store.add_recommendation(conn, "block_destination", "evil.test", "25MB upload")
+
+    # Pending: nothing is denied yet.
+    assert client.get("/v1/rules").json()["rules"] == []
+    assert client.get("/v1/rules/check", params={"dst": "evil.test"}).json()["denied"] is False
+
+    approved = client.post(
+        f"/v1/recommendations/{rec_id}/decision",
+        json={"approve": True, "actor": "analyst@example.test"},
+    )
+    assert approved.status_code == 200
+    assert approved.json()["recommendation"]["status"] == "approved"
+
+    rules = client.get("/v1/rules").json()["rules"]
+    assert [r["destination"] for r in rules] == ["evil.test"]
+    assert rules[0]["approved_by"] == "analyst@example.test"
+
+
+def test_rejection_does_not_create_a_rule(client: TestClient) -> None:
+    rec_id = store.add_recommendation(conn, "block_destination", "fine.test", "false positive")
+    client.post(
+        f"/v1/recommendations/{rec_id}/decision",
+        json={"approve": False, "actor": "analyst@example.test"},
+    )
+    assert client.get("/v1/rules").json()["rules"] == []
+
+
+def test_rules_txt_is_squid_dstdomain_format(client: TestClient) -> None:
+    rec_id = store.add_recommendation(conn, "block_destination", "evil.test", "why")
+    client.post(
+        f"/v1/recommendations/{rec_id}/decision",
+        json={"approve": True, "actor": "a@b.test"},
+    )
+    body = client.get("/v1/rules.txt")
+    assert body.headers["content-type"].startswith("text/plain")
+    # One destination per line, no envelope — squid parses this, not the dashboard.
+    assert body.text == "evil.test\n"
+
+
+def test_check_matches_subdomains(client: TestClient) -> None:
+    rec_id = store.add_recommendation(conn, "block_destination", "evil.test", "why")
+    client.post(
+        f"/v1/recommendations/{rec_id}/decision",
+        json={"approve": True, "actor": "a@b.test"},
+    )
+    check = "/v1/rules/check"
+    # Parent-domain match, matching squid's own dstdomain semantics.
+    assert client.get(check, params={"dst": "upload.evil.test:443"}).json()["denied"] is True
+    assert client.get(check, params={"dst": "evil.test:443"}).json()["denied"] is True
+    assert client.get(check, params={"dst": "notevil.test"}).json()["denied"] is False
+    # A rule on evil.test must not deny an unrelated domain that ends similarly.
+    assert client.get(check, params={"dst": "evil.test.other.test"}).json()["denied"] is False
+
+
+def test_decision_on_unknown_recommendation_is_404(client: TestClient) -> None:
+    assert (
+        client.post(
+            "/v1/recommendations/rec-nope/decision",
+            json={"approve": True, "actor": "a@b.test"},
+        ).status_code
+        == 404
+    )
+
+
+# --- MCP surface --------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_mcp_client_lists_and_calls_tools() -> None:
+    from fastmcp import Client
+
+    async with Client(mcp) as mcp_client:
+        names = {t.name for t in await mcp_client.list_tools()}
+        assert {
+            "query_events",
+            "get_evidence",
+            "get_rules",
+            "submit_finding",
+            "recommend_policy",
+        } <= names
+
+        store.add_event(conn, SQUID_EVENT)
+        result = await mcp_client.call_tool("query_events", {"limit": 10})
+        assert len(result.data["events"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_recommend_policy_rejects_an_action_outside_the_enum() -> None:
+    """The enum is enforced by the tool schema, so a bad action fails at the
+    protocol boundary rather than inside handler code (dxnvh-2jb.7)."""
+    from fastmcp import Client
+    from fastmcp.exceptions import ToolError
+
+    async with Client(mcp) as mcp_client:
+        with pytest.raises(ToolError):
+            await mcp_client.call_tool(
+                "recommend_policy",
+                {"action_type": "rm -rf /", "destination": "evil.test", "rationale": "x"},
+            )
+
+
+@pytest.mark.asyncio
+async def test_mcp_recommendation_is_visible_to_rest(client: TestClient) -> None:
+    """The two surfaces share one store — an agent's recommendation must show
+    up for the analyst without any syncing step."""
+    from fastmcp import Client
+
+    async with Client(mcp) as mcp_client:
+        result = await mcp_client.call_tool(
+            "recommend_policy",
+            {
+                "action_type": "block_destination",
+                "destination": "evil.test",
+                "rationale": "25MB to an unseen host",
+            },
+        )
+        rec_id = result.data["recommendation_id"]
+
+    pending = client.get("/v1/recommendations", params={"status": "pending"}).json()
+    assert [r["recommendation_id"] for r in pending["recommendations"]] == [rec_id]
+
+
+def test_mcp_endpoint_is_mounted_with_lifespan(client: TestClient) -> None:
+    """Regression guard for the documented failure mode: constructing FastAPI
+    without mcp_app.lifespan mounts fine and then fails on session state, with
+    no startup error pointing at the cause."""
+    assert app.router.lifespan_context is not None
+    # A GET without the MCP headers is rejected by the protocol, not 404 —
+    # which proves something is actually mounted and speaking MCP.
+    assert client.get("/mcp/").status_code != 404

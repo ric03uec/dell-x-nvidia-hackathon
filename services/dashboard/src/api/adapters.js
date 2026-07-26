@@ -160,6 +160,14 @@ export function toSystemStatusView(status) {
       gpuMemory: finiteNumber(memoryUsed) && finiteNumber(memoryTotal)
         ? `${formatBytes(memoryUsed)} / ${formatBytes(memoryTotal)}`
         : UNAVAILABLE,
+      gpuMemoryLabel: gpu.memory_scope === "unified"
+        ? "Unified"
+        : gpu.memory_scope === "device"
+          ? "VRAM"
+          : "Memory",
+      gpuObservedAt: formatTimestamp(gpu.observed_at, { includeDate: true }),
+      gpuSource: present(gpu.source),
+      gpuStatus: present(gpu.status),
     },
     footer: {
       status: present(rawStatus),

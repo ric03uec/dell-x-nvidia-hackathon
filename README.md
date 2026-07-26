@@ -17,8 +17,29 @@ just a hello-agent run     # run one agent's service locally
 just dashboard-setup       # install the SquidWard dashboard dependencies
 just dashboard-dev         # run the dashboard locally
 just s dashboard mock      # run the standalone contract-shaped mock API
-just dashboard-demo        # run SquidWard and its mock API together
+just dashboard-demo        # run SquidWard with preloaded mock data
+just demo-pipeline         # generate → ingest → detect → recommend → dashboard
 ```
+
+`just demo-pipeline` starts an empty stateful demo API, posts all 26 synthetic
+events, runs them through deterministic rules and the promoted Isolation Forest,
+stores the resulting finding and constrained recommendation through the API, and
+then launches the dashboard at `http://127.0.0.1:8300`.
+
+On the GB10, the dashboard API reads GPU utilization from `nvidia-smi` and
+unified-memory usage from `/proc/meminfo`. Configure `.env`, then run:
+
+```bash
+just doctor local
+set -a
+source .env
+set +a
+just dashboard-demo
+```
+
+From a workstation, `just doctor <ssh-host>` performs the same readiness checks
+over SSH. The dashboard binds to `MGMT_BIND_ADDR` and keeps the mock API and
+LiteLLM credentials on the GB10 loopback interface.
 
 ## Add an agent
 

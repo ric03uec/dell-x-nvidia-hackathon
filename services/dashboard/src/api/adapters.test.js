@@ -21,6 +21,8 @@ test("keeps unavailable system values explicit", () => {
 
   assert.equal(view.appliance.egress, "Unavailable");
   assert.equal(view.appliance.gpuUtilization, null);
+  assert.equal(view.appliance.gpuMemoryLabel, "Memory");
+  assert.equal(view.appliance.gpuStatus, "Unavailable");
   assert.equal(view.footer.healthy, false);
   assert.equal(view.footer.queueDepth, null);
 });

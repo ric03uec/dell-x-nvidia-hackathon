@@ -1,16 +1,18 @@
 [project]
 name = "ingestion"
 version = "0.1.0"
-description = "Ingestion API scaffold (component 2). Scaffold only - schema, adapters, and the real API surface land in epic 2."
+description = "Event ingestion: REST for the dashboard and collector, MCP tools for the OpenClaw security agent, and the rules surface Squid enforces from."
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
-    "uvicorn>=0.32",
+    "fastmcp>=2.11",
+    "uvicorn>=0.30",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8",
+    "pytest-asyncio>=0.24",
     "ruff>=0.6",
     "mypy>=1.11",
     "httpx>=0.27",

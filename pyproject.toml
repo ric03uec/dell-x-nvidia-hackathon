@@ -27,5 +27,20 @@ select = ["E", "F", "I", "UP", "B"]
 python_version = "3.11"
 strict = true
 
+# torch is an OPTIONAL extra (services/processing[offline]) imported lazily inside
+# the functions that need it, so a plain `just check` runs without a multi-gigabyte
+# aarch64 download. mypy must therefore tolerate it being absent.
+[[tool.mypy.overrides]]
+module = ["torch.*"]
+ignore_missing_imports = true
+
+# Consequence of the above: with torch unresolved its calls are Any, so the
+# `type: ignore[no-untyped-call]` on loss.backward() reads as unused — but it is
+# load-bearing whenever the offline extra IS installed. Don't delete the comment;
+# just stop warning about it here.
+[[tool.mypy.overrides]]
+module = ["processing.autoencoder"]
+warn_unused_ignores = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

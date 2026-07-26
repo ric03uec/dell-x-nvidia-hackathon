@@ -1,0 +1,23 @@
+---
+- name: Recover OpenClaw after a GB10 reboot
+  hosts: gb10
+  gather_facts: true
+  tasks:
+    - name: Validate shared deployment prerequisites
+      ansible.builtin.include_tasks: tasks/prerequisites.yml
+
+    - name: Recover the existing inference stack
+      ansible.builtin.include_tasks: tasks/inference.yml
+      vars:
+        inference_repair: true
+
+    - name: Start the OpenClaw gateway
+      ansible.builtin.systemd_service:
+        name: openclaw-gateway.service
+        scope: user
+        state: started
+
+    - name: Verify the recovered stack
+      ansible.builtin.include_tasks: tasks/verify.yml
+      vars:
+        openclaw_live_prompt: true

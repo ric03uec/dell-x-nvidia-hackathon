@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SquidWard | Hackathon Pitch</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="deck" aria-live="polite">
+    <section class="slide title-slide active" data-title="SquidWard">
+      <div class="eyebrow"><span class="pulse"></span> Dell x NVIDIA Hackathon 2026</div>
+      <div class="title-lockup">
+        <div class="loop-mark" aria-hidden="true"><i></i><i></i><b>SQUID</b></div>
+        <div>
+          <h1>Squid<span>Ward</span></h1>
+          <p class="tagline">Autonomous defense.<br>Zero data egress.</p>
+        </div>
+      </div>
+      <p class="lede">An always-on local security agent that detects suspicious agent behavior, investigates it on the GB10, and turns analyst-approved recommendations into enforced OpenShell policy.</p>
+      <div class="footer-label">TEAM V-X / ENTERPRISE AGENT SECURITY / 01</div>
+      <aside class="notes">Open with the risk: autonomous agents take real actions. Sending their evidence to a cloud security model creates another exposure. SquidWard gives every local business agent a local defender.</aside>
+    </section>
+
+    <section class="slide team-slide" data-title="Team V-X">
+      <div class="eyebrow">TEAM V-X / 02</div>
+      <h2>Four builders. One local defense loop.</h2>
+      <div class="team-grid">
+        <article><span>SJ</span><div><h3>Shrivara Jois</h3><a href="https://github.com/shrivara">@shrivara</a></div></article>
+        <article><span>BC</span><div><h3>Brian Cripe</h3><a href="https://github.com/briancripe">@briancripe</a></div></article>
+        <article><span>DM</span><div><h3>Devashish Meena</h3><a href="https://github.com/ric03uec">@ric03uec</a></div></article>
+        <article><span>RH</span><div><h3>Rohan Hasabe</h3><a href="https://github.com/Hasaber8">@Hasaber8</a></div></article>
+      </div>
+      <div class="team-repo"><span>PROJECT</span><strong>SquidWard</strong><i>/</i><span>TEAM</span><strong>V-X</strong></div>
+      <aside class="notes">We are team V-X: Shrivara, Brian, Devashish Meena, and Rohan. We built SquidWard as a local-first security control plane for enterprise agents.</aside>
+    </section>
+
+    <section class="slide" data-title="The trust gap">
+      <div class="eyebrow">THE TRUST GAP / 03</div>
+      <h2>Cloud security can break the trust boundary it is meant to protect.</h2>
+      <div class="split-choice">
+        <article class="choice cloud">
+          <span class="choice-num">A</span>
+          <h3>Send evidence<br>to the cloud</h3>
+          <p>Prompts, URLs, actions, and incident context leave the appliance.</p>
+          <div class="risk-line"><span></span>New exposure</div>
+        </article>
+        <div class="versus">OR</div>
+        <article class="choice static">
+          <span class="choice-num">B</span>
+          <h3>Keep evidence<br>private</h3>
+          <p>Static policy misses suspicious sequences across multiple actions.</p>
+          <div class="risk-line"><span></span>Blind spots</div>
+        </article>
+      </div>
+      <div class="answer-strip"><strong>SquidWard removes the trade-off.</strong> Investigation and enforcement stay on the appliance.</div>
+      <aside class="notes">The evidence needed to investigate an autonomous agent is often the exact data an enterprise cannot send elsewhere. Traditional rules preserve privacy but miss sequences. Cloud AI reasons across sequences but crosses the boundary.</aside>
+    </section>
+
+    <section class="slide" data-title="The closed loop">
+      <div class="eyebrow">THE CLOSED LOOP / 04</div>
+      <h2>SquidWard closes the loop from suspicious action to enforced policy on one GB10.</h2>
+      <div class="loop-flow" aria-label="Observe, detect, investigate, recommend, approve, enforce">
+        <div class="flow-node"><b>01</b><strong>Observe</strong><small>OpenShell + Squid</small></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><b>02</b><strong>Detect</strong><small>Rules + models</small></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node accent"><b>03</b><strong>Investigate</strong><small>Local security agent</small></div>
+        <div class="flow-arrow down">↓</div>
+        <div class="flow-node"><b>06</b><strong>Enforce</strong><small>OpenShell policy</small></div>
+        <div class="flow-arrow reverse">←</div>
+        <div class="flow-node human"><b>05</b><strong>Approve</strong><small>Human analyst</small></div>
+        <div class="flow-arrow reverse">←</div>
+        <div class="flow-node"><b>04</b><strong>Recommend</strong><small>Constrained action</small></div>
+      </div>
+      <p class="outcome"><span>Outcome</span> A suspicious transfer is explained, approved, and blocked when attempted again.</p>
+      <aside class="notes">This is not another alert generator. SquidWard creates a closed response loop. It observes actions, detects anomalies, investigates locally, proposes one constrained action, waits for approval, and changes policy at the enforcement point.</aside>
+    </section>
+
+    <section class="slide architecture" data-title="Local architecture">
+      <div class="eyebrow">LOCAL-FIRST ARCHITECTURE / 05</div>
+      <h2>Every event, model, and inference stays inside the GB10.</h2>
+      <div class="boundary">
+        <div class="boundary-label">DELL GB10 / TRUSTED BOUNDARY</div>
+        <div class="arch-row">
+          <div class="arch-box">Business<br>agent</div><span>→</span>
+          <div class="arch-box">OpenShell</div><span>→</span>
+          <div class="arch-box">Squid</div><span>→</span>
+          <div class="arch-box storage">FastAPI<br><small>SQLite</small></div>
+        </div>
+        <div class="arch-join">↓</div>
+        <div class="arch-row lower">
+          <div class="arch-box">Live rules<br><small>Isolation Forest</small></div><span>+</span>
+          <div class="arch-box gpu">PyTorch<br><small>GPU analysis</small></div><span>→</span>
+          <div class="arch-box agent">Security agent<br><small>NemoClaw + local model</small></div><span>→</span>
+          <div class="arch-box human">Analyst<br><small>Approve / reject</small></div><span>→</span>
+          <div class="arch-box">Policy<br><small>Audit</small></div>
+        </div>
+      </div>
+      <div class="runtime-proof">
+        <article><span>vLLM</span><strong>MTP ON</strong><small>Higher local throughput</small></article>
+        <article><span>CONCURRENCY</span><strong>3 SEQS</strong><small><code>max-num-seqs=3</code></small></article>
+        <article><span>LiteLLM</span><strong>LIVE</strong><small>Today's token usage</small></article>
+        <article class="egress"><span>EGRESS</span><strong>0 CALLS</strong><small>No cloud fallback</small></article>
+      </div>
+      <aside class="notes">The complete data and inference path is inside one boundary. vLLM runs with multi-token prediction and max-num-seqs set to three, our max-throughput configuration that lets multiple consumers share local inference. LiteLLM meters today's token usage, giving us an observable live metric without exporting prompts or telemetry. There is no cloud fallback.</aside>
+    </section>
+
+    <section class="slide" data-title="Dual-speed detection">
+      <div class="eyebrow">ALWAYS-ON DETECTION / 06</div>
+      <h2>Two detection speeds catch both obvious spikes and slow cross-action attacks.</h2>
+      <div class="detectors">
+        <article>
+          <div class="speed"><strong>&lt;1s</strong><span>LIVE PATH</span></div>
+          <div class="signal fast"></div>
+          <h3>Immediate anomaly scoring</h3>
+          <p>Rules, rolling baselines, and CPU Isolation Forest score each new event without depending on an LLM.</p>
+        </article>
+        <article>
+          <div class="speed"><strong>HISTORY</strong><span>OFFLINE PATH</span></div>
+          <div class="signal deep"></div>
+          <h3>Sequence-level analysis</h3>
+          <p>A safe SQLite snapshot and GPU PyTorch model find slow, related patterns across longer windows.</p>
+        </article>
+      </div>
+      <div class="converge"><span>DETERMINISTIC EVIDENCE</span><b>→</b><strong>ALWAYS-ON SECURITY AGENT</strong></div>
+      <aside class="notes">Fast and deep analysis have different jobs. The live path catches immediate anomalies in seconds. The offline path uses GPU and historical windows for slower patterns. Both produce deterministic evidence before the security agent adds explanation.</aside>
+    </section>
+
+    <section class="slide" data-title="Safe enforcement">
+      <div class="eyebrow">SAFE AUTONOMY / 07</div>
+      <h2>The model recommends; a human authorizes; OpenShell enforces.</h2>
+      <div class="policy-stage">
+        <pre><span>policy_recommendation</span> {
+  action_type: <b>"deny_destination"</b>,
+  target:      <b>"test-storage.local"</b>,
+  scope:       <b>"business-agent"</b>,
+  expires_at:  <b>"2026-07-27T..."</b>
+}</pre>
+        <div class="gate">
+          <div class="gate-icon">H</div>
+          <strong>HUMAN GATE</strong>
+          <div><button>REJECT</button><button class="approve">APPROVE</button></div>
+        </div>
+        <div class="shield"><span>✓</span><strong>ENFORCED</strong><small>OpenShell policy</small></div>
+      </div>
+      <div class="guardrails"><span>No shell commands</span><span>No direct enforcement</span><span>Schema validated</span><span>Fully audited</span></div>
+      <aside class="notes">Autonomous defense cannot mean autonomous privilege escalation. The model only recommends an allowlisted action. A human approves it. The adapter validates it again before OpenShell applies it, and the result becomes an audit event.</aside>
+    </section>
+
+    <section class="slide" data-title="Measurable value">
+      <div class="eyebrow">MEASURABLE VALUE / 08</div>
+      <h2>One workflow proves privacy, control, and prevention with four observable outcomes.</h2>
+      <div class="metrics">
+        <article><strong>0</strong><span>cloud LLM calls</span><small>Inference stays on GB10</small></article>
+        <article><strong>1</strong><span>analyst decision</span><small>Policy requires approval</small></article>
+        <article><strong>2<sup>nd</sup></strong><span>attempt blocked</span><small>Prevention, not alerting</small></article>
+        <article><strong>100%</strong><span>local audit trail</span><small>Evidence stays private</small></article>
+      </div>
+      <div class="value-line"><span>For enterprise security teams</span> A private control plane for autonomous agents: shorter investigation cycles, enforceable guardrails, and deployment where cloud AI is not acceptable.</div>
+      <aside class="notes">The business value is observable reduction in exposure and response friction. One appliance detects the event, gives the analyst evidence needed to decide, and prevents the repeat attempt without exporting customer data.</aside>
+    </section>
+
+    <section class="slide demo-slide" data-title="Live demo">
+      <div class="eyebrow">LIVE DEMO / 09</div>
+      <h2>Now watch the same transfer go from allowed to blocked.</h2>
+      <ol class="demo-steps">
+        <li><b>01</b><span><strong>Normal activity</strong>Business agent works inside OpenShell.</span></li>
+        <li><b>02</b><span><strong>Suspicious sequence</strong>Data is staged and uploaded to a new destination.</span></li>
+        <li><b>03</b><span><strong>Local response</strong>SquidWard detects, investigates, and recommends.</span></li>
+        <li><b>04</b><span><strong>Human control</strong>The analyst approves a constrained policy.</span></li>
+        <li><b>05</b><span><strong>Enforcement</strong>The repeated transfer is blocked and audited.</span></li>
+      </ol>
+      <div class="watch"><span>WATCH</span><b>Incident timeline</b><i>→</i><b>Policy review</b><i>→</i><b>Enforcement audit</b></div>
+      <aside class="notes">The first transfer gives us evidence; the second proves prevention. Watch the incident timeline, the policy review and human gate, and the enforcement audit for the blocked result. Switch to the live demo.</aside>
+    </section>
+
+    <section class="slide end-slide" data-title="Close">
+      <div class="eyebrow"><span class="pulse"></span> SQUIDWARD / 10</div>
+      <h2>Autonomous agents deserve<br>a local line of defense.</h2>
+      <p class="closing">Detect locally. <span>Decide safely.</span> Enforce immediately.</p>
+      <div class="rubric">
+        <span>LOCAL-FIRST</span><span>BUSINESS VALUE</span><span>END-TO-END DEMO</span><span>TECHNICAL CONTROL</span>
+      </div>
+      <aside class="notes">SquidWard makes local AI operationally safe: the evidence stays private, the security agent stays on, the human stays in control, and policy is enforced where the agent acts.</aside>
+    </section>
+  </main>
+
+  <nav class="controls" aria-label="Presentation controls">
+    <button id="prev" aria-label="Previous slide">←</button>
+    <div class="progress"><i id="progress"></i></div>
+    <span id="counter">01 / 10</span>
+    <button id="notes" aria-label="Toggle speaker notes">N</button>
+    <button id="fullscreen" aria-label="Toggle fullscreen">⛶</button>
+    <button id="next" aria-label="Next slide">→</button>
+  </nav>
+  <div class="notes-panel" id="notes-panel"><strong>SPEAKER NOTES</strong><p id="notes-copy"></p></div>
+  <script src="deck.js"></script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+---
+- name: Verify vLLM response
+  ansible.builtin.uri:
+    url: http://127.0.0.1:8000/v1/models
+    status_code: 200
+    timeout: 15
+  changed_when: false
+
+- name: Verify authenticated LiteLLM response
+  ansible.builtin.shell: |
+    set -euo pipefail
+    source {{ litellm_env_file | quote }}
+    curl --fail --silent --show-error --max-time 15 \
+      -H "Authorization: Bearer ${LITELLM_MASTER_KEY}" \
+      http://127.0.0.1:4000/v1/models
+  args:
+    executable: /bin/bash
+  register: verified_litellm_models
+  changed_when: false
+  no_log: true
+
+- name: Verify LiteLLM model selection
+  ansible.builtin.assert:
+    that:
+      - openclaw_model in (verified_litellm_models.stdout | from_json).data | map(attribute='id') | list
+
+- name: Verify the OpenClaw service
+  ansible.builtin.command:
+    argv: [systemctl, --user, is-active, openclaw-gateway.service]
+  changed_when: false
+
+- name: Wait for the OpenClaw dashboard
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ openclaw_gateway_port }}/"
+    status_code: 200
+    timeout: 15
+  register: openclaw_dashboard_probe
+  retries: 12
+  delay: 5
+  until: openclaw_dashboard_probe.status == 200
+  changed_when: false
+
+- name: Verify dashboard listener
+  ansible.builtin.shell: |
+    set -euo pipefail
+    ss -H -ltn "sport = :{{ openclaw_gateway_port }}" | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\*):{{ openclaw_gateway_port }}([[:space:]]|$)'
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Run a real OpenClaw agent request
+  ansible.builtin.shell: |
+    set -euo pipefail
+    export PATH={{ openclaw_install_root | quote }}/bin:"${PATH}"
+    set -a
+    source {{ openclaw_runtime_env_file | quote }}
+    set +a
+    response="$({{ openclaw_install_root | quote }}/bin/openclaw agent \
+      --agent main \
+      --message 'Reply with exactly OPENCLAW_HEALTH_OK' \
+      --session-id ansible-health)"
+    [[ "${response}" == *OPENCLAW_HEALTH_OK* ]]
+  args:
+    executable: /bin/bash
+  register: openclaw_live_prompt_result
+  when: openclaw_live_prompt | default(false) | bool
+  changed_when: false
