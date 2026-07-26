@@ -1,0 +1,23 @@
+[project]
+name = "contracts-py"
+version = "0.1.0"
+description = "Pydantic models derived from the frozen JSON Schemas in contracts/ — the one typed representation of the canonical event, finding, policy recommendation, approval, and enforcement-result payloads."
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Lint/type/test config lives at the workspace root (../../pyproject.toml) so
+# every member shares one set of rules — do not redeclare [tool.ruff],
+# [tool.mypy] or [tool.pytest.ini_options] here.
