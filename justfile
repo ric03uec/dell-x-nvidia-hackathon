@@ -20,6 +20,7 @@ default:
 setup:
     uv sync --project {{ lib }}
     @just each setup
+    @just s processing setup
     pnpm --dir {{ dashboard }} install --frozen-lockfile
 
 # Lint, format-check, and typecheck the shared libs and every agent
@@ -31,6 +32,7 @@ check:
     @just contracts-check
     @just fixtures-check
     @just each check
+    @just s processing check
     @just dashboard-check
 
 # Run the shared library tests and every agent's tests
@@ -38,6 +40,7 @@ check:
 test:
     uv run --project {{ lib }} pytest {{ lib }}
     @just each test
+    @just s processing test
     @just dashboard-test
 
 # Start the SquidWard dashboard locally
