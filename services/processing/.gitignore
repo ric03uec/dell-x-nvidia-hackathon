@@ -1,0 +1,4 @@
+artifacts/*.pkl
+artifacts/*.pt
+artifacts/current
+artifacts/*.json

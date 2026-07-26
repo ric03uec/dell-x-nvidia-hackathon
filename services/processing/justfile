@@ -1,0 +1,26 @@
+set shell := ["bash", "-uc"]
+
+[group('processing')]
+setup:
+    uv sync
+
+[group('processing')]
+check:
+    uv run ruff check .
+    uv run ruff format --check .
+    uv run mypy src
+
+[group('processing')]
+test:
+    uv run pytest
+
+[group('processing')]
+train model="artifacts/isolation-forest.pkl":
+    uv run squidward-process train-iforest \
+      --normal ../../fixtures/expected/normal.json --output {{ model }}
+
+[group('processing')]
+demo model="artifacts/isolation-forest.pkl":
+    uv run squidward-process detect \
+      --events ../../fixtures/expected/suspicious.json \
+      --baseline ../../fixtures/expected/normal.json --model {{ model }}
