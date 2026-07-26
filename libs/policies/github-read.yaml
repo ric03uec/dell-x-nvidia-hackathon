@@ -1,0 +1,25 @@
+# Read-only GitHub API access for an agent that inspects repos but must not
+# write to them. Method rules are the enforcement — `access: read-only` alone is
+# shorthand, and the explicit deny keeps a widened preset from re-granting DELETE.
+github_read:
+  name: github-read-only
+  endpoints:
+    - host: api.github.com
+      port: 443
+      protocol: rest
+      enforcement: enforce
+      rules:
+        - allow:
+            method: GET
+            path: "/**"
+      deny_rules:
+        - method: POST
+          path: "/**"
+        - method: PATCH
+          path: "/**"
+        - method: PUT
+          path: "/**"
+        - method: DELETE
+          path: "/**"
+  binaries:
+    - path: /usr/bin/gh

@@ -1,0 +1,15 @@
+# Let an agent install Python packages. L4 only — no protocol, no method rules —
+# because these are bulk artifact fetches, not an API surface worth inspecting.
+#
+# Scope this to the moment you need it. An agent that can reach a package index
+# can execute whatever it decides to install.
+package_registries:
+  name: python-package-registries
+  endpoints:
+    - host: pypi.org
+      port: 443
+    - host: files.pythonhosted.org
+      port: 443
+  binaries:
+    - path: /usr/local/bin/uv
+    - path: /usr/bin/pip

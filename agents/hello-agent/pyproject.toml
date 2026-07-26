@@ -1,0 +1,36 @@
+[project]
+name = "hello-agent"
+version = "0.1.0"
+description = "Worked example NemoClaw agent project; also the template `just new` copies."
+requires-python = ">=3.11"
+dependencies = ["agentkit"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "httpx>=0.27",
+]
+
+# Shared code is a path dependency, never a workspace member — that is what keeps
+# this project's lockfile its own and parallel worktrees conflict-free.
+[tool.uv.sources]
+agentkit = { path = "../../libs/agentkit", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
