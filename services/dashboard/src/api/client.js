@@ -142,6 +142,14 @@ export function getFinding(id, options) {
   return request(`/findings/${encodeURIComponent(id)}`, options);
 }
 
+export function startFindingInvestigation(id, options) {
+  return request(`/findings/${encodeURIComponent(id)}/investigate`, {
+    ...options,
+    method: "POST",
+    body: { schema_version: SCHEMA_VERSION },
+  });
+}
+
 export function getRecommendations(status, options) {
   return request(`/recommendations${queryString({ status })}`, options);
 }

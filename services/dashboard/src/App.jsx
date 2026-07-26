@@ -4,6 +4,7 @@ import {
   getEnforcementResults,
   getFinding,
   getRecommendations,
+  startFindingInvestigation,
   submitRecommendationDecision,
   toMetricStrip,
   toRiskEvents,
@@ -314,6 +315,33 @@ function App() {
         loading: false,
         recommendation,
       });
+      if (finding.investigation?.status === "pending") {
+        try {
+          const investigationResponse = await startFindingInvestigation(findingId);
+          setIncident((current) => current?.findingId === findingId ? {
+            ...current,
+            finding: {
+              ...current.finding,
+              investigation: investigationResponse.investigation,
+              investigation_status: investigationResponse.investigation.status,
+            },
+          } : current);
+        } catch (error) {
+          const failedInvestigation = error.details?.investigation ?? {
+            status: "failed",
+            summary: null,
+            served_model: finding.investigation.served_model,
+          };
+          setIncident((current) => current?.findingId === findingId ? {
+            ...current,
+            finding: {
+              ...current.finding,
+              investigation: failedInvestigation,
+              investigation_status: failedInvestigation.status,
+            },
+          } : current);
+        }
+      }
     } catch (error) {
       setIncident({ error: error.message, findingId, loading: false });
     }
@@ -520,7 +548,9 @@ function Sidebar({ activePage, onNavigate, status }) {
         <div className="appliance-row"><span>Mode</span><b className="ok">{status.mode}</b></div>
         <div className="appliance-row"><span>Egress</span><b>{status.egress}</b></div>
         <div className="meter"><i style={{ width: `${status.gpuUtilization ?? 0}%` }} /></div>
-        <p>GPU {status.gpuUtilization ?? "Unavailable"}% · {status.gpuMemory}</p>
+        <p title={`${status.gpuStatus} · ${status.gpuSource} · ${status.gpuObservedAt}`}>
+          GPU {status.gpuUtilization === null ? "Unavailable" : `${status.gpuUtilization}%`} · {status.gpuMemoryLabel} {status.gpuMemory}
+        </p>
       </div>
     </aside>
   );

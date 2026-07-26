@@ -1,0 +1,18 @@
+---
+- name: Inspect the LiteLLM secret source
+  ansible.builtin.stat:
+    path: "{{ litellm_env_file }}"
+    follow: false
+  register: litellm_env_stat
+
+- name: Validate the LiteLLM secret boundary
+  ansible.builtin.assert:
+    that:
+      - litellm_env_stat.stat.exists
+      - litellm_env_stat.stat.isreg
+      - not litellm_env_stat.stat.islnk
+      - litellm_env_stat.stat.mode == '0600'
+      - litellm_env_stat.stat.pw_name == ansible_user
+    fail_msg: >-
+      {{ litellm_env_file }} must be a regular, non-symlink file owned by
+      {{ ansible_user }} with mode 0600.

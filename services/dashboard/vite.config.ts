@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: "127.0.0.1",
+    host: process.env.MGMT_BIND_ADDR || "127.0.0.1",
     port: Number(process.env.DASHBOARD_PORT || 8300),
     watch: { useFsEvents: false, usePolling: true },
     proxy: {

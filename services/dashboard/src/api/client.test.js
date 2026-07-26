@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ApiError, submitRecommendationDecision } from "./client.js";
+import { ApiError, startFindingInvestigation, submitRecommendationDecision } from "./client.js";
 
 test("submits only the versioned explicit recommendation decision", async () => {
   const originalFetch = globalThis.fetch;
@@ -39,4 +39,25 @@ test("rejects unsupported response schema versions", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("starts investigation without sending finding evidence from the browser", async () => {
+  const originalFetch = globalThis.fetch;
+  let captured;
+  globalThis.fetch = async (url, options) => {
+    captured = { url, options };
+    return new Response(
+      JSON.stringify({ schema_version: "1.0", investigation: { status: "completed" } }),
+      { status: 200 },
+    );
+  };
+
+  try {
+    await startFindingInvestigation("fnd-one");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(captured.url, "/api/v1/findings/fnd-one/investigate");
+  assert.deepEqual(JSON.parse(captured.options.body), { schema_version: "1.0" });
 });
