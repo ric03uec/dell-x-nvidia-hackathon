@@ -13,24 +13,15 @@ dev = [
     "httpx>=0.27",
 ]
 
-# Shared code is a path dependency, never a workspace member — that is what keeps
-# this project's lockfile its own and parallel worktrees conflict-free.
+# Shared code is a workspace member, resolved and locked together with every
+# other project here in the single root uv.lock.
 [tool.uv.sources]
-agentkit = { path = "../../libs/agentkit", editable = true }
+agentkit = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.ruff]
-line-length = 100
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
-
-[tool.mypy]
-python_version = "3.11"
-strict = true
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
+# Lint/type/test config lives at the workspace root (../../pyproject.toml) so
+# every member shares one set of rules — do not redeclare [tool.ruff],
+# [tool.mypy] or [tool.pytest.ini_options] here.

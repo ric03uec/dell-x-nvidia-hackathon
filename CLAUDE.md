@@ -11,6 +11,17 @@ No central registry, no shared lockfile — that's what lets parallel worktrees
 merge cleanly. Changes to `libs/`, `docs/`, or the root `justfile` are their
 own separate change.
 
+## uv.lock conflicts
+
+`uv.lock` is machine-generated and marked `-merge` in `.gitattributes`, so a
+conflicting merge/rebase leaves it flagged conflicted with no `<<<<<<<`
+markers inside it. **Never hand-edit `uv.lock`.** Resolve it by taking one
+side and regenerating:
+
+```bash
+just relock          # or: just relock theirs
+```
+
 ## Commands
 
 ```bash

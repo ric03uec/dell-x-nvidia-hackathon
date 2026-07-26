@@ -39,6 +39,15 @@ test:
 doctor host="":
     ./scripts/doctor.sh {{ host }}
 
+# Resolve a conflicted uv.lock by taking one side and regenerating it from
+# the (already-merged) pyproject.tomls — never hand-edit uv.lock.
+# Run after a merge/rebase leaves uv.lock conflicted: just relock [ours|theirs]
+[group('workspace')]
+relock side="ours":
+    git checkout --{{ side }} -- uv.lock
+    uv lock
+    git add uv.lock
+
 # Validate contracts/examples/* against their JSON Schemas (rejects unlisted policy action_type)
 [group('contracts')]
 contracts-check:
