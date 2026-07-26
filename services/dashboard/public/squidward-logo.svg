@@ -1,0 +1,45 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="1200"
+  height="320"
+  viewBox="0 0 1200 320"
+  fill="none"
+  role="img"
+  aria-labelledby="squidward-logo-title squidward-logo-description"
+>
+  <title id="squidward-logo-title">SquidWard</title>
+  <desc id="squidward-logo-description">
+    SquidWard shield and abstract squid mark with wordmark
+  </desc>
+
+  <g transform="translate(30 18)">
+    <path
+      fill="#6546E8"
+      d="M132 12 240 58v78c0 62-40 107-108 139C64 243 24 198 24 136V58L132 12Z"
+    />
+
+    <path
+      fill="#FFFFFF"
+      d="M121 58 132 52l11 6v104c0 36 18 61 50 78l-18 19c-20-12-34-26-43-43-9 17-23 31-43 43l-18-19c32-17 50-42 50-78V58Z"
+    />
+    <path
+      fill="#FFFFFF"
+      d="M62 136c17 0 31-7 42-21 5-7 9-15 12-24l25 8c-5 16-12 29-21 40-15 18-34 29-58 31l-7-33 7-1Z"
+    />
+    <path
+      fill="#FFFFFF"
+      d="M202 136c-17 0-31-7-42-21-5-7-9-15-12-24l-25 8c5 16 12 29 21 40 15 18 34 29 58 31l7-33-7-1Z"
+    />
+    <path fill="#4AA9A1" d="m132 250 23 15-23 14-23-14 23-15Z" />
+  </g>
+
+  <text
+    x="330"
+    y="205"
+    fill="#171A22"
+    font-family="Inter, Segoe UI, Arial, sans-serif"
+    font-size="128"
+    font-weight="650"
+    letter-spacing="-5"
+  >SquidWard</text>
+</svg>

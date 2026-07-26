@@ -4,6 +4,7 @@
 set shell := ["bash", "-uc"]
 
 agents_dir := "agents"
+dashboard := "services/dashboard"
 lib := "libs/agentkit"
 template := "hello-agent"
 gb10 := "dell-gb10"
@@ -18,6 +19,7 @@ default:
 setup:
     uv sync --project {{ lib }}
     @just each setup
+    pnpm --dir {{ dashboard }} install --frozen-lockfile
 
 # Lint, format-check, and typecheck the shared libs and every agent
 [group('workspace')]
@@ -26,12 +28,35 @@ check:
     uv run --project {{ lib }} ruff format --check {{ lib }}
     uv run --project {{ lib }} mypy {{ lib }}/src
     @just each check
+    @just dashboard-check
 
 # Run the shared library tests and every agent's tests
 [group('workspace')]
 test:
     uv run --project {{ lib }} pytest {{ lib }}
     @just each test
+    @just dashboard-test
+
+# Start the SquidWard dashboard locally
+[group('dashboard')]
+dashboard-dev:
+    pnpm --dir {{ dashboard }} dev
+
+# Install the dashboard's pinned dependencies
+[group('dashboard')]
+dashboard-setup:
+    pnpm --dir {{ dashboard }} install --frozen-lockfile
+
+# Lint and typecheck the dashboard
+[group('dashboard')]
+dashboard-check:
+    pnpm --dir {{ dashboard }} lint
+    pnpm --dir {{ dashboard }} typecheck
+
+# Build the dashboard as its current test gate
+[group('dashboard')]
+dashboard-test:
+    pnpm --dir {{ dashboard }} test
 
 # Check the local toolchain, and a DGX Spark host if one is given
 [group('workspace')]

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="SquidWard is an enterprise, local-first exfiltration protection console."
+    />
+    <meta name="theme-color" content="#17181b" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="SquidWard | Enterprise + Local First" />
+    <meta property="og:description" content="Enterprise security operations. Local data and control." />
+    <meta name="twitter:title" content="SquidWard | Enterprise + Local First" />
+    <meta name="twitter:description" content="Enterprise security operations. Local data and control." />
+    <link rel="icon" href="/favicon.svg" />
+    <title>SquidWard | Enterprise + Local First</title>
+  </head>
+  <body>
+    <script>
+      // Runs before paint so a stored light theme does not flash dark first.
+      try {
+        var t = localStorage.getItem("squidward-theme");
+        if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

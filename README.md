@@ -14,6 +14,8 @@ just each setup           # sync every project's venv
 just each check           # lint + format + typecheck everywhere
 just each test             # tests everywhere
 just a hello-agent run     # run one agent's service locally
+just dashboard-setup       # install the SquidWard dashboard dependencies
+just dashboard-dev         # run the dashboard locally
 ```
 
 ## Add an agent
@@ -48,6 +50,7 @@ just deploy hello-agent spark.local --image   # ship a built image instead
 | Path | What |
 |---|---|
 | `agents/<name>/` | One self-contained agent project. Own deps, own lock, own manifest + policy. |
+| `services/dashboard/` | SquidWard React dashboard. Own pnpm lockfile and build. |
 | `libs/agentkit/` | Shared Python package — FastAPI service factory, `agents.yaml`/`policy.yaml` validation. |
 | `libs/policies/` | Reusable OpenShell policy fragments. |
 | `scripts/deploy.sh` | rsync+apply, or image push. |

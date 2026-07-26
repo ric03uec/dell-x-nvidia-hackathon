@@ -3,4 +3,5 @@
 # checks them over ssh.
 [tools]
 just = "1.54"
+pnpm = "11.17"
 uv = "0.11"
