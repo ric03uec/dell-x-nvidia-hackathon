@@ -1,0 +1,18 @@
+---
+openclaw_version: 2026.7.1-2
+openclaw_node_version: 22.22.3
+openclaw_node_archive_sha256: 1c4a9933a5e45bc88f54f70b5f91232c127ec49f1a5989d23fb85824c7adf9b7
+openclaw_model: Qwen3.6-27B-FP8
+openclaw_gateway_port: 18789
+openclaw_gateway_bind: lan
+
+litellm_env_file: /home/dell/vllm/env/litellm.env
+vllm_wrapper: /home/dell/bin/hack-vllm-large-qwen
+litellm_wrapper: /home/dell/bin/hack-litellm-large-qwen
+
+openclaw_install_root: /home/dell/.local/share/openclaw
+openclaw_cache_dir: /home/dell/.cache/openclaw-install
+openclaw_node_archive: "{{ openclaw_cache_dir }}/node-v{{ openclaw_node_version }}-linux-arm64.tar.xz"
+openclaw_state_dir: /home/dell/.openclaw
+openclaw_workspace_dir: "{{ openclaw_state_dir }}/workspace"
+openclaw_runtime_env_file: "{{ openclaw_state_dir }}/runtime.env"

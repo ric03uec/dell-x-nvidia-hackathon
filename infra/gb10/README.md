@@ -15,7 +15,8 @@ Ubuntu 24.04.3, kernel 6.17.0-1021-nvidia, aarch64, NVIDIA GB10 (driver
 Outbound internet works (PyPI and Hugging Face reachable) — the USB bundles at
 `/mnt/modelshub` are a bandwidth convenience, not an airgap requirement.
 
-`openshell` v0.0.91 is installed via uv; `nemoclaw` is not.
+`openshell` v0.0.91 remains installed via uv but is not used by this deployment.
+OpenClaw is managed directly by the Ansible playbooks in `ansible/`.
 
 ## What runs
 
@@ -73,7 +74,8 @@ exported to the USB but never imported: `nemotron-3-nano-30b-a3b-nvfp4`,
 
 ## Changing something
 
-The loop is: **edit here → push → restart → verify.**
+The inference-only maintenance loop is: **edit here → push → restart →
+verify.**
 
 ```bash
 just gb10-push                 # rsync this dir to the box (never secrets, never weights)
@@ -119,10 +121,26 @@ Add an entry to the relevant `litellm/config.<backend>.yaml` — **not**
 `config.yaml`, which gets overwritten. `api_base` uses the compose service
 name, not localhost.
 
-## Known issues
+## NemoClaw and OpenClaw
 
-- `docker default-cgroupns-mode=host` is **not** set in `/etc/docker/daemon.json`.
-  Harmless today, but the OpenShell gateway embeds k3s in Docker and will fail
-  on cgroup v2 without it. Fix before the first gateway start.
-- `scripts/doctor.sh dell-gb10` reports `FAIL nemoclaw installed` — accurate,
-  nemoclaw genuinely isn't there.
+The complete agent stack is deployed through Ansible and uses the existing
+LiteLLM service without changing its Compose topology:
+
+```bash
+just gb10-up
+just gb10-status
+just gb10-recover
+```
+
+`gb10-recover` reconnects over SSH, recovers inference if needed, and starts the
+OpenClaw user service. The host currently has user-service linger disabled, so
+run this command after a reboot if no `dell` login has started the service. The
+default inventory targets the working SSH alias `hack`.
+
+OpenClaw runs directly as the `dell` user's systemd service; NemoClaw and
+OpenShell are not part of this deployment. Its operator-authored desired state
+lives in `../openclaw/`. The token-authenticated dashboard binds directly to
+`0.0.0.0:18789`; it is reachable from every network that can route to the host.
+This deployment does not enable the GB10's currently disabled shared-host
+firewall because doing so could disrupt unrelated services. Apply host or
+upstream network filtering separately if access must be restricted.
