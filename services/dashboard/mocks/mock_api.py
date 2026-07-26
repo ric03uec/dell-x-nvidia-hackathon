@@ -14,6 +14,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
 
+from gpu_telemetry import GpuTelemetryCollector
+
 SCHEMA_VERSION = "1.0"
 FINDING_ID = "fnd-synthetic-001"
 RECOMMENDATION_ID = "rec-synthetic-001"
@@ -201,9 +203,14 @@ class LiteLLMClient:
 class MockApi:
     """Pure response/state model shared by the HTTP handler and unit tests."""
 
-    def __init__(self, inference_client: LiteLLMClient | None = None) -> None:
+    def __init__(
+        self,
+        inference_client: LiteLLMClient | None = None,
+        gpu_collector: GpuTelemetryCollector | None = None,
+    ) -> None:
         self._decision: dict[str, Any] | None = None
         self._inference_client = inference_client
+        self._gpu_collector = gpu_collector
         self._investigation: dict[str, Any] | None = None
         self._lock = Lock()
 
@@ -230,6 +237,13 @@ class MockApi:
 
     def _finding(self) -> dict[str, Any]:
         suspicious_events = SOURCE_EVENTS[15:22]
+        investigation = self._investigation or {
+            "schema_version": SCHEMA_VERSION,
+            "status": "pending" if self._inference_client else "unavailable",
+            "summary": None,
+            "served_model": self._inference_client.model if self._inference_client else None,
+            "route": "litellm-local" if self._inference_client else None,
+        }
         return {
             "schema_version": SCHEMA_VERSION,
             "finding_id": FINDING_ID,
@@ -237,7 +251,7 @@ class MockApi:
             "severity": "critical",
             "risk_score": 92,
             "status": "completed",
-            "investigation_status": "completed",
+            "investigation_status": investigation["status"],
             "actor": "business-agent",
             "destination": "new-receiver.demo.local",
             "first_seen": suspicious_events[0]["timestamp"],
@@ -271,14 +285,7 @@ class MockApi:
                     "event_ids": ["evt-022"],
                 },
             ],
-            "investigation": self._investigation
-            or {
-                "schema_version": SCHEMA_VERSION,
-                "status": "pending" if self._inference_client else "unavailable",
-                "summary": None,
-                "served_model": self._inference_client.model if self._inference_client else None,
-                "route": "litellm-local" if self._inference_client else None,
-            },
+            "investigation": investigation,
             "recommendation_ids": [RECOMMENDATION_ID],
         }
 
@@ -335,20 +342,31 @@ class MockApi:
                     inference = self._inference_client.status()
                 except RuntimeError:
                     inference["status"] = "unavailable"
+            gpu = (
+                self._gpu_collector.collect()
+                if self._gpu_collector
+                else {
+                    "status": "unavailable",
+                    "utilization_percent": None,
+                    "memory_used_bytes": None,
+                    "memory_total_bytes": None,
+                    "memory_scope": None,
+                    "gpu_present": False,
+                    "source": None,
+                    "observed_at": None,
+                }
+            )
+            healthy = inference["status"] == "healthy" and gpu["status"] == "healthy"
             return 200, _response(
-                generated_at=GENERATED_AT,
-                status="operational" if inference["status"] == "healthy" else "degraded",
+                generated_at=gpu["observed_at"] or GENERATED_AT,
+                status="operational" if healthy else "degraded",
                 appliance={
                     "name": "gb10-demo",
                     "model": "GB10",
                     "mode": "observe",
                     "address": "127.0.0.1",
                     "egress": "Verified blocked",
-                    "gpu": {
-                        "utilization_percent": 62,
-                        "memory_used_bytes": 24_100_000_000,
-                        "memory_total_bytes": 119_700_000_000,
-                    },
+                    "gpu": gpu,
                 },
                 ingestion={"events_per_second": 7.3, "queue_depth": 0},
                 model={"active_version": inference["loaded_model"], **inference},
@@ -356,6 +374,7 @@ class MockApi:
                     {"name": "event_ingestion", "status": "operational"},
                     {"name": "investigation", "status": inference["status"]},
                     {"name": "policy_enforcement", "status": "operational"},
+                    {"name": "gpu", "status": gpu["status"]},
                 ],
             )
         if path == "/v1/metrics/summary":
@@ -493,7 +512,7 @@ class MockApi:
 
 
 class MockRequestHandler(BaseHTTPRequestHandler):
-    api = MockApi(LiteLLMClient.from_env())
+    api = MockApi(LiteLLMClient.from_env(), GpuTelemetryCollector())
 
     def _write_json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")

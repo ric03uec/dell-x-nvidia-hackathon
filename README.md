@@ -20,6 +20,21 @@ just s dashboard mock      # run the standalone contract-shaped mock API
 just dashboard-demo        # run SquidWard and its mock API together
 ```
 
+On the GB10, the dashboard API reads GPU utilization from `nvidia-smi` and
+unified-memory usage from `/proc/meminfo`. Configure `.env`, then run:
+
+```bash
+just doctor local
+set -a
+source .env
+set +a
+just dashboard-demo
+```
+
+From a workstation, `just doctor <ssh-host>` performs the same readiness checks
+over SSH. The dashboard binds to `MGMT_BIND_ADDR` and keeps the mock API and
+LiteLLM credentials on the GB10 loopback interface.
+
 ## Add an agent
 
 ```bash

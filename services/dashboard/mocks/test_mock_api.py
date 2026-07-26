@@ -30,6 +30,20 @@ class FakeInferenceClient:
         }
 
 
+class FakeGpuCollector:
+    def collect(self) -> dict:
+        return {
+            "status": "healthy",
+            "utilization_percent": 42,
+            "memory_used_bytes": 24_000_000_000,
+            "memory_total_bytes": 120_000_000_000,
+            "memory_scope": "unified",
+            "gpu_present": True,
+            "source": "test",
+            "observed_at": "2026-07-26T14:00:00Z",
+        }
+
+
 class MockApiTests(unittest.TestCase):
     def test_source_events_and_finding_exclude_resource_evidence(self) -> None:
         api = MockApi()
@@ -46,7 +60,7 @@ class MockApiTests(unittest.TestCase):
         status, finding_response = api.get(f"/v1/findings/{FINDING_ID}")
         self.assertEqual(status, 200)
         finding = finding_response["finding"]
-        self.assertEqual(finding["investigation_status"], "completed")
+        self.assertEqual(finding["investigation_status"], "unavailable")
         self.assertEqual(finding["event_ids"], [f"evt-{index:03d}" for index in range(16, 23)])
         self.assertEqual(finding["recommendation_ids"], [RECOMMENDATION_ID])
 
@@ -92,7 +106,7 @@ class MockApiTests(unittest.TestCase):
 
     def test_local_investigation_is_separate_and_cached(self) -> None:
         client = FakeInferenceClient()
-        api = MockApi(client)
+        api = MockApi(client, FakeGpuCollector())
 
         _, before = api.get(f"/v1/findings/{FINDING_ID}")
         self.assertEqual(before["finding"]["investigation"]["status"], "pending")
@@ -107,6 +121,7 @@ class MockApiTests(unittest.TestCase):
         _, system = api.get("/v1/system-status")
         self.assertEqual(system["status"], "operational")
         self.assertTrue(system["model"]["route_match"])
+        self.assertEqual(system["appliance"]["gpu"]["utilization_percent"], 42)
 
     def test_litellm_ui_url_is_normalized_to_api_base(self) -> None:
         client = LiteLLMClient(

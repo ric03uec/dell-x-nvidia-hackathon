@@ -70,6 +70,9 @@ check "docker default-cgroupns-mode=host" \
 
 check "local inference responding on :8000" \
     remote "curl -fsS --max-time 10 http://127.0.0.1:8000/v1/models"
+check "GPU utilization telemetry available" \
+    remote "nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits"
+check "unified memory telemetry available" remote "test -r /proc/meminfo"
 
 if [[ $failed -ne 0 ]]; then
     echo

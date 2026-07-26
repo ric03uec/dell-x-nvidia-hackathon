@@ -548,7 +548,9 @@ function Sidebar({ activePage, onNavigate, status }) {
         <div className="appliance-row"><span>Mode</span><b className="ok">{status.mode}</b></div>
         <div className="appliance-row"><span>Egress</span><b>{status.egress}</b></div>
         <div className="meter"><i style={{ width: `${status.gpuUtilization ?? 0}%` }} /></div>
-        <p>GPU {status.gpuUtilization ?? "Unavailable"}% · {status.gpuMemory}</p>
+        <p title={`${status.gpuStatus} · ${status.gpuSource} · ${status.gpuObservedAt}`}>
+          GPU {status.gpuUtilization === null ? "Unavailable" : `${status.gpuUtilization}%`} · {status.gpuMemoryLabel} {status.gpuMemory}
+        </p>
       </div>
     </aside>
   );
