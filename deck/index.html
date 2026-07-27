@@ -175,27 +175,30 @@
 
     <section class="slide stats-slide" data-title="Stats for today">
       <div class="eyebrow">STATS FOR TODAY / 10</div>
-      <h2>Local inference handled real workloads without adding model spend.</h2>
-      <div class="usage-sections">
-        <section class="usage-section cloud-usage" aria-label="Cloud usage">
-          <div class="usage-heading"><span>CLOUD USAGE</span><small>THREE TEAM REPORTS</small></div>
-          <div class="usage-metrics">
-            <article><strong>$526.24</strong><span>Spend</span><small>$314.35 + $135.62 + $76.27</small></article>
-            <article><strong>800.2M</strong><span>Tokens used</span><small>Reported total, including cached tokens</small></article>
-            <article><strong>14</strong><span>Models used</span><small>Reported model counts across sources</small></article>
+      <h2>Today, local inference delivered real usage at zero model spend.</h2>
+      <div class="stats-compare">
+        <section class="stats-panel cloud-panel" aria-label="Cloud usage">
+          <header><span>01 / CLOUD</span><small>3 TEAM REPORTS</small></header>
+          <div class="hero-stat"><strong>$526.24</strong><span>spent today</span></div>
+          <div class="support-stats">
+            <div><strong>800.2M</strong><span>tokens used</span></div>
+            <div><strong>14</strong><span>models used</span></div>
           </div>
+          <footer><span>CACHE HIT</span><strong>94.9–100%</strong></footer>
         </section>
-        <section class="usage-section local-usage" aria-label="Local usage">
-          <div class="usage-heading"><span>LOCAL GB10 USAGE</span><small>ZERO INFERENCE COST</small></div>
-          <div class="usage-metrics local-metrics">
-            <article><strong>187</strong><span>Successful requests</span></article>
-            <article><strong>3.38M</strong><span>Tokens used</span><small>3,376,622 total tokens</small></article>
-            <article><strong>$0.00</strong><span>Spend</span></article>
-            <article><strong>1</strong><span>Model used</span><small>openai/Qwen/Qwen3.6-27B-FP8</small></article>
+        <div class="comparison-mark" aria-hidden="true"><span>VS</span></div>
+        <section class="stats-panel local-panel" aria-label="Local GB10 usage">
+          <header><span>02 / LOCAL GB10</span><small>PRIVATE INFERENCE</small></header>
+          <div class="hero-stat"><strong>$0.00</strong><span>model spend</span></div>
+          <div class="support-stats local-support">
+            <div><strong>187</strong><span>total requests</span></div>
+            <div><strong>167</strong><span>successful</span></div>
+            <div><strong>3.38M</strong><span>tokens used</span></div>
           </div>
+          <footer><span>MODEL</span><strong>Qwen3.6-27B-FP8</strong></footer>
         </section>
       </div>
-      <aside class="notes">Today the team used 800.2 million reported cloud tokens across 14 reported model usages at a cost of 526 dollars and 24 cents. On the local GB10, Qwen completed 187 successful requests and processed 3,376,622 tokens at zero model spend.</aside>
+      <aside class="notes">Today the cloud reports totaled 526 dollars and 24 cents across 800.2 million reported tokens and 14 reported model usages. The local GB10 processed 187 requests, 167 successfully, and 3,376,622 tokens using Qwen at zero model spend.</aside>
     </section>
 
     <section class="slide end-slide" data-title="Close">
