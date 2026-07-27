@@ -142,6 +142,17 @@ gb10-restart profile="qwen36":
     ssh {{ gb10 }} 'bin/hack-vllm-large-qwen start {{ profile }}'
     ssh {{ gb10 }} 'bin/hack-litellm-large-qwen start {{ profile }}'
 
+# Start the squid egress proxy on the box (LAN clients use port 3128)
+[group('gb10')]
+gb10-squid-up:
+    ssh {{ gb10 }} 'docker compose -f vllm/docker-compose.squid.yml up -d'
+    @echo "proxy: http://192.168.0.100:3128"
+
+# Live tail of proxied egress: timestamp, client, verdict, destination
+[group('gb10')]
+gb10-egress:
+    ssh {{ gb10 }} 'docker exec hack-squid tail -f /var/log/squid/access.log'
+
 # Install, configure, start, and verify OpenClaw on the GB10
 [group('gb10')]
 gb10-up +flags="":
