@@ -7,6 +7,7 @@ export {
   getMetricsSummary,
   getRecommendations,
   getSystemStatus,
+  getVulnerabilities,
   request,
   startFindingInvestigation,
   submitRecommendationDecision,
@@ -19,4 +20,6 @@ export {
   toRiskEvent,
   toRiskEvents,
   toSystemStatusView,
+  toCvePage,
+  toFeedbackPage,
 } from "./adapters.js";

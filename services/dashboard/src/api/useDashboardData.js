@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 
-import { getEvents, getFindings, getMetricsSummary, getSystemStatus } from "./client.js";
+import {
+  getEvents,
+  getFindings,
+  getMetricsSummary,
+  getRecommendations,
+  getSystemStatus,
+  getVulnerabilities,
+} from "./client.js";
 
 function usePolling(load, intervalMs, dependencies) {
   useEffect(() => {
@@ -40,8 +47,11 @@ export function useDashboardData(range) {
   const [summary, setSummary] = useState(null);
   const [events, setEvents] = useState(null);
   const [findings, setFindings] = useState(null);
+  const [recommendations, setRecommendations] = useState(null);
+  const [vulnerabilities, setVulnerabilities] = useState(null);
   const [summaryError, setSummaryError] = useState(null);
   const [activityError, setActivityError] = useState(null);
+  const [vulnerabilityError, setVulnerabilityError] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   async function loadSummary(signal) {
@@ -57,28 +67,43 @@ export function useDashboardData(range) {
   }
 
   async function loadActivity(signal) {
-    const [eventsResult, findingsResult] = await Promise.allSettled([
+    const [eventsResult, findingsResult, recommendationsResult] = await Promise.allSettled([
       getEvents({ signal }),
       getFindings({ signal }),
+      getRecommendations(undefined, { signal }),
     ]);
     if (eventsResult.status === "fulfilled") setEvents(eventsResult.value);
     if (findingsResult.status === "fulfilled") setFindings(findingsResult.value);
-    const nextError = [eventsResult, findingsResult]
+    if (recommendationsResult.status === "fulfilled") setRecommendations(recommendationsResult.value);
+    const nextError = [eventsResult, findingsResult, recommendationsResult]
       .find((result) => result.status === "rejected" && result.reason.code !== "ABORTED");
     setActivityError(nextError?.reason ?? null);
   }
 
+  async function loadVulnerabilities(signal) {
+    try {
+      setVulnerabilities(await getVulnerabilities({ signal }));
+      setVulnerabilityError(null);
+    } catch (error) {
+      if (error.code !== "ABORTED") setVulnerabilityError(error);
+    }
+  }
+
   usePolling(loadSummary, 30_000, [range, refreshKey]);
   usePolling(loadActivity, 5_000, [refreshKey]);
+  usePolling(loadVulnerabilities, 15 * 60_000, [refreshKey]);
 
   const error = activityError ?? summaryError;
   return {
     error,
     events,
     findings,
+    recommendations,
     refresh: () => setRefreshKey((value) => value + 1),
     stale: error !== null,
     status,
     summary,
+    vulnerabilities,
+    vulnerabilityError,
   };
 }

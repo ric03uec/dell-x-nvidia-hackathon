@@ -66,6 +66,78 @@ export function toRiskEvents(projections) {
   return Array.isArray(events) ? events.map(toRiskEvent) : [];
 }
 
+export function toCvePage(catalog) {
+  const vulnerabilities = Array.isArray(catalog?.vulnerabilities) ? catalog.vulnerabilities : [];
+  const ransomware = vulnerabilities.filter((item) => item.ransomware_use === "Known").length;
+  const today = new Date().toISOString().slice(0, 10);
+  const overdue = vulnerabilities.filter((item) => item.due_date && item.due_date < today).length;
+  const fetched = formatTimestamp(catalog?.fetched_at, { includeDate: true });
+
+  return {
+    metrics: [
+      ["KEVs tracked", present(catalog?.count), UNAVAILABLE, "neutral", []],
+      ["Recent entries", String(vulnerabilities.length), UNAVAILABLE, "neutral", []],
+      ["Ransomware linked", String(ransomware), UNAVAILABLE, "negative", []],
+      ["Remediation overdue", String(overdue), UNAVAILABLE, overdue ? "negative" : "positive", []],
+    ],
+    title: "CISA KEV Watchlist",
+    meta: catalog ? `${catalog.stale ? "Stale cache" : "Live feed"} · fetched ${fetched}` : "Waiting for CISA KEV",
+    columns: [
+      { key: "id", label: "CVE ID", width: "1.4fr" },
+      { key: "added", label: "Added", width: ".65fr" },
+      { key: "due", label: "Remediate by", width: ".65fr" },
+      { key: "ransomware", label: "Ransomware", width: ".7fr" },
+      { key: "status", label: "Status", width: ".65fr" },
+    ],
+    rows: vulnerabilities.map((item) => [
+      [item.cve_id, [item.vendor, item.product].filter(Boolean).join(" · ") || "Product unavailable"],
+      present(item.date_added),
+      present(item.due_date),
+      present(item.ransomware_use),
+      { badge: "Known exploited", level: item.ransomware_use === "Known" ? "critical" : "high" },
+    ]),
+  };
+}
+
+// Matches the incident drawer's decision badge in App.jsx.
+const VERDICT_LEVELS = { approved: "ok", rejected: "critical", pending: "muted" };
+
+export function toFeedbackPage(catalog) {
+  const recommendations = Array.isArray(catalog?.recommendations) ? catalog.recommendations : [];
+  const byStatus = (status) => recommendations.filter((item) => item.status === status).length;
+  const reviewed = recommendations.filter((item) => item.decision).length;
+  const rate = recommendations.length
+    ? `${Math.round((reviewed / recommendations.length) * 100)}%`
+    : UNAVAILABLE;
+
+  return {
+    metrics: [
+      ["Pending review", String(byStatus("pending")), UNAVAILABLE, "negative", []],
+      ["Approved", String(byStatus("approved")), UNAVAILABLE, "neutral", []],
+      ["Rejected", String(byStatus("rejected")), UNAVAILABLE, "positive", []],
+      ["Reviewed", rate, UNAVAILABLE, "neutral", []],
+    ],
+    title: "Review Queue",
+    meta: catalog
+      ? `${reviewed} of ${recommendations.length} recommendations reviewed`
+      : "Waiting for API",
+    columns: [
+      { key: "target", label: "Recommendation", width: "1.3fr" },
+      { key: "analyst", label: "Analyst", width: ".7fr" },
+      { key: "at", label: "Reviewed", width: ".5fr", align: "right" },
+      { key: "scope", label: "Scope", width: ".6fr" },
+      { key: "verdict", label: "Verdict", width: ".7fr" },
+    ],
+    rows: recommendations.map((item) => [
+      [present(item.target), present(item.reason)],
+      present(item.decision?.analyst),
+      formatTimestamp(item.decision?.timestamp),
+      present(item.scope),
+      { badge: present(item.status), level: VERDICT_LEVELS[item.status] ?? "muted" },
+    ]),
+  };
+}
+
 function formatNumber(value) {
   if (!finiteNumber(value)) return present(value);
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);

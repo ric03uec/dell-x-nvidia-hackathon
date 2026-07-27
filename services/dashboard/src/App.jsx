@@ -7,6 +7,8 @@ import {
   startFindingInvestigation,
   submitRecommendationDecision,
   toMetricStrip,
+  toCvePage,
+  toFeedbackPage,
   toRiskEvents,
   toSystemStatusView,
 } from "./api/index.js";
@@ -43,9 +45,8 @@ const navSections = [
     items: [
       { id: "dashboard", label: "Overview", icon: "grid" },
       { id: "events", label: "Live Events", icon: "activity" },
-      ...(DEMO_PAGES_ENABLED
-        ? [{ id: "cve", label: "CVE Intelligence", icon: "shield", count: 7 }]
-        : []),
+      { id: "cve", label: "CVE Intelligence", icon: "shield" },
+      { id: "feedback", label: "Analyst Feedback", icon: "review" },
     ],
   },
   ...(DEMO_PAGES_ENABLED
@@ -54,7 +55,6 @@ const navSections = [
         items: [
           { id: "assets", label: "Asset Discovery", icon: "server" },
           { id: "models", label: "Model Registry", icon: "layers" },
-          { id: "feedback", label: "Analyst Feedback", icon: "review", count: 23 },
         ],
       }]
     : []),
@@ -63,10 +63,10 @@ const navSections = [
 const pageMeta = {
   dashboard: ["Security Operations", "Exfiltration protection", "local first"],
   events: ["Live Events", "Event stream", "local inference"],
-  cve: ["CVE Intelligence", "Vulnerability context", "demo data"],
+  cve: ["CVE Intelligence", "CISA KEV", "live feed"],
   assets: ["Asset Discovery", "Network inventory", "demo data"],
   models: ["Model Registry", "Detection models", "demo data"],
-  feedback: ["Analyst Feedback", "Review queue", "demo data"],
+  feedback: ["Analyst Feedback", "Review queue", "local first"],
 };
 
 const ranges = ["1H", "4H", "1D", "1W", "1M"];
@@ -109,6 +109,8 @@ function App() {
     return toMetricStrip(live.summary).slice(0, 4);
   }, [live.summary]);
   const system = useMemo(() => toSystemStatusView(live.status), [live.status]);
+  const cvePage = useMemo(() => toCvePage(live.vulnerabilities), [live.vulnerabilities]);
+  const feedbackPage = useMemo(() => toFeedbackPage(live.recommendations), [live.recommendations]);
   const dataUnavailable = !live.status || !live.summary || !live.events;
 
   useEffect(() => {
@@ -295,6 +297,10 @@ function App() {
             />
           ) : activePage === "events" ? (
             <LiveEventsPage events={liveEvents} metrics={overviewMetrics} needle={needle} onOpenIncident={openIncident} />
+          ) : activePage === "cve" ? (
+            <DataPage data={cvePage} error={live.vulnerabilityError} needle={needle} notify={notify} />
+          ) : activePage === "feedback" ? (
+            <DataPage data={feedbackPage} error={live.error} needle={needle} notify={notify} />
           ) : DEMO_PAGES_ENABLED && demoPageData[activePage] ? (
             <DataPage data={demoPageData[activePage]} needle={needle} notify={notify} />
           ) : null}
@@ -739,13 +745,14 @@ function DrawerSection({ children, meta, title }) {
   );
 }
 
-function DataPage({ data, notify, needle }) {
+function DataPage({ data, error, notify, needle }) {
   const visible = data.rows.filter((row) => matches(row, needle));
   const total = data.columns.reduce((sum, item) => sum + parseFloat(item.width), 0);
 
   return (
     <>
       <MetricStrip metrics={data.metrics} />
+      {error && <div className="drawer-message error">Live vulnerability feed unavailable: {error.message}</div>}
       <Panel
         action={<CountBadge shown={visible.length} total={data.rows.length} />}
         className="table-panel"
