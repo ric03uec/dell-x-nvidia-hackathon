@@ -22,7 +22,7 @@ import sys
 import time
 import urllib.request
 
-from . import agent, anomalies, traffic
+from . import agent, anomalies, run, traffic
 from .catalog import ALL, ROUTINE
 
 INGESTION = "http://127.0.0.1:8100"
@@ -151,6 +151,17 @@ def cmd_agent(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_run(args: argparse.Namespace) -> int:
+    return run.main(
+        prime_s=args.prime,
+        enforce_s=args.enforce,
+        progress_s=args.progress,
+        auto_approve=not args.no_auto_approve,
+        log_path=args.log,
+        attack_mb=args.attack_mb,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -178,6 +189,15 @@ def main(argv: list[str] | None = None) -> int:
 
     ag = sub.add_parser("agent", help="run the MCP investigation loop on demand")
     ag.set_defaults(func=cmd_agent)
+
+    r = sub.add_parser("run", help="the full phased demo: prime, decide, enforce")
+    r.add_argument("--prime", type=float, default=60.0)
+    r.add_argument("--enforce", type=float, default=90.0)
+    r.add_argument("--progress", type=float, default=5.0)
+    r.add_argument("--attack-mb", type=int, default=4)
+    r.add_argument("--log", default="/home/dell/ingestion-data/demo-run.log")
+    r.add_argument("--no-auto-approve", action="store_true")
+    r.set_defaults(func=cmd_run)
 
     args = parser.parse_args(argv)
     return int(args.func(args))
