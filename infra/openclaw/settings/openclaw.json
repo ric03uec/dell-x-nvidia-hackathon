@@ -34,7 +34,7 @@
   "tools": {
     "profile": "coding",
     "fs": {
-      "workspaceOnly": true
+      "workspaceOnly": false
     },
     "exec": {
       "host": "gateway",
@@ -43,7 +43,7 @@
       "timeoutSec": 1800,
       "applyPatch": {
         "enabled": true,
-        "workspaceOnly": true
+        "workspaceOnly": false
       }
     }
   },

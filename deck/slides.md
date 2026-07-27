@@ -1,13 +1,13 @@
 # SquidWard
 
-## Autonomous defense. Zero data egress.
+## Firewall policy at AI speed. Human control intact.
 
 **Dell x NVIDIA Hackathon 2026**
 
-> An always-on local security agent that detects suspicious agent behavior, investigates it on the GB10, and turns analyst-approved recommendations into enforced OpenShell policy.
+> AI agents connect to dynamic endpoints faster than static firewall rules can keep up. SquidWard detects behavioral risk locally and turns it into analyst-approved OpenShell policy.
 
 **Speaker notes (0:00-0:30)**
-Autonomous agents can now take real actions, but every action expands the attack surface. Sending their evidence to a cloud security model creates another risk. SquidWard gives every local business agent a local defender, without exporting the evidence.
+Traditional IT firewalls were built for humans and predictable traffic. AI agents act continuously, discover tools, and connect to dynamic endpoints. Policy maintained at human speed becomes stale before the next action. SquidWard closes that speed gap without removing human control.
 
 ---
 
@@ -27,23 +27,23 @@ We are team V-X: Shrivara, Brian, Devashish Meena, and Rohan. We built SquidWard
 
 ---
 
-# Cloud security can break the trust boundary it is meant to protect.
+# Traditional firewalls were built for humans and static traffic.
 
-## Enterprise security teams face an impossible trade-off
+## Enterprise security teams now face a speed mismatch
 
-| Send evidence to the cloud | Keep evidence private |
+| Human-speed firewall policy | AI-speed agent traffic |
 |---|---|
-| Sensitive prompts, URLs, actions, and incident context leave the appliance | Existing tools lose the reasoning power needed to correlate agent behavior |
-| External inference adds latency and dependency | Static policy misses suspicious sequences across multiple actions |
+| Static destinations and manual rule changes | Autonomous actions and newly discovered tools |
+| Ticket-driven response | Dynamic endpoints and continuous change |
 
-**SquidWard removes the trade-off:** powerful investigation and enforcement stay on the appliance.
+**SquidWard closes the speed gap:** it turns live agent behavior into safe, enforceable policy updates.
 
 **Speaker notes (0:30-1:10)**
-The evidence required to investigate an autonomous agent is often the exact data an enterprise cannot send elsewhere: actions, destinations, prompts, and business context. Traditional rules preserve privacy but miss sequences. Cloud AI can reason across the sequence but crosses the trust boundary.
+The firewall is not obsolete; its operating model is. Security teams cannot manually anticipate every destination an agent may discover or update rules between machine-speed actions. SquidWard continuously observes behavior, detects risk, and prepares the policy response at AI speed.
 
 ---
 
-# SquidWard closes the loop from suspicious action to enforced policy on one GB10.
+# SquidWard turns agent behavior into enforceable policy on one GB10.
 
 ```text
 OBSERVE              DETECT               INVESTIGATE
@@ -56,49 +56,53 @@ OpenShell policy     Human analyst         Constrained action
 
 ## The outcome
 
-A suspicious transfer is detected locally, explained locally, approved by a human, and blocked when it is attempted again.
+AI-speed detection and policy recommendation; human-approved enforcement before the next attempt.
 
 **Speaker notes (1:10-1:55)**
-This is not another alert generator. SquidWard creates a closed response loop. It observes agent actions, detects anomalies, uses a dedicated security agent to investigate, proposes one constrained action, waits for human approval, and then changes the policy at the enforcement point.
+SquidWard is the adaptive policy layer between autonomous agents and the firewall. It observes actions, detects anomalies, investigates locally, and proposes a constrained policy update at machine speed. The analyst retains final authority, and OpenShell enforces the approved change where the agent acts.
 
 ---
 
-# Every event, model, and inference stays inside the GB10.
+# Pre-AI IT Systems
 
 ```text
-+------------------------ DELL GB10 APPLIANCE -------------------------+
-|                                                                      |
-| Business agent -> OpenShell -> Squid -> FastAPI -> SQLite            |
-|                                     |                                |
-|                          Live rules + Isolation Forest                |
-|                                     |                                |
-| SQLite snapshot -> PyTorch sequence model -> Security agent          |
-|                                              |                       |
-|                                   NemoClaw -> Local model             |
-|                                              |                       |
-| Dashboard -> Analyst approval -> OpenShell policy -> Audit event      |
-|                                                                      |
-+---------------------------------------------------------------------+
-                         X  NO CLOUD LLM CALLS
+Internal systems  ->  Firewall  ->  Internet
+Users, laptops,       Static        External
+and applications      rules         destinations
 ```
 
-## Local-first is an architectural boundary, not a deployment option.
+**Speaker notes**
+Before AI agents, enterprise traffic was comparatively predictable. Internal users and applications reached known internet destinations through firewalls maintained with static rules and human-speed updates.
 
-- No external inference fallback
-- SQLite remains appliance-local
-- Customer telemetry never leaves the GB10
-- The complete demo can run with outbound access disabled
+---
 
-## Local inference is tuned and observable.
+# Traffic flows normally. SquidWard keeps the firewall current.
 
-| Runtime evidence | Why it matters |
-|---|---|
-| vLLM multi-token prediction enabled | Maximizes local decoding throughput |
-| `max-num-seqs=3` | Allows three concurrent inference sequences for multiple consumers |
-| LiteLLM daily token accounting | Shows token usage for the current day without exporting telemetry |
+```text
+                  LIVE TRAFFIC
+
+Internal systems -> Firewall / Squid Proxy -> Internet
+Users, laptops,       reads current rules     allowed traffic
+and agents                    |
+                              v
+IT operators ---> +---------- SQUIDWARD / SECURE GB10 ----------+ <--> Public CVE DB
+                  |                                               |     scheduled scan
+                  | SquidWard agent -> API -> GB10 + local LLM    |
+                  |                         |                     |
+                  |                    Rules database              |
+                  |                                               |
+                  | Rules, questions, and inference stay inside.  |
+                  +-----------------------------------------------+
+```
+
+## The current system has two simple paths.
+
+- **Traffic:** internal users, laptops, and agents reach the internet through the existing firewall. Squid Proxy is the current implementation.
+- **Policy:** IT operators and scheduled public CVE scans feed SquidWard. Its agent, API, local LLM, and rules database remain inside the secure GB10 boundary.
+- **Expansion:** additional firewall adapters can read from the same private rules database.
 
 **Speaker notes (1:55-2:45)**
-The entire data and inference path is inside one boundary. vLLM runs with multi-token prediction and max-num-seqs set to three, our max-throughput configuration that lets multiple consumers share local inference. LiteLLM meters today's token usage, giving us an observable live metric without exporting prompts or telemetry. There is no cloud fallback.
+The top line is the network path enterprises already have: internal users, laptops, and agents send traffic through a firewall to the internet. Squid Proxy is our current firewall, with room for other adapters. Below it, SquidWard keeps policy current. IT operators work through the SquidWard agent, the agent uses the API and local GB10 model, and scheduled scans bring in public CVE intelligence. The local model and rules database both remain inside the secure boundary. The firewall reads the resulting rules without changing the traffic path.
 
 ---
 
@@ -156,10 +160,10 @@ Autonomous defense cannot mean autonomous privilege escalation. The model can on
 
 ## Business value
 
-SquidWard gives enterprise security teams a private control plane for autonomous agents: shorter investigation cycles, enforceable guardrails, and deployment in environments where cloud AI is not acceptable.
+SquidWard gives enterprise security teams an adaptive firewall control plane for autonomous agents: machine-speed policy recommendations, enforceable guardrails, and private local operation.
 
 **Speaker notes (4:05-4:35)**
-The business value is not an abstract AI score. It is an observable reduction in exposure and response friction. One local appliance detects the event, gives an analyst the evidence needed to decide, and prevents the repeat attempt without exporting customer data.
+The business value is a firewall operating model that can keep pace with agents. One appliance detects changing behavior, gives the analyst a ready-to-enforce policy decision, and prevents the repeat attempt without exporting customer data.
 
 ---
 
@@ -182,15 +186,15 @@ The first transfer gives us evidence; the second proves prevention. Watch the in
 
 ---
 
-# Autonomous agents deserve a local line of defense.
+# Agentic traffic needs a firewall that can keep up.
 
 ## SquidWard
 
-**Detect locally. Decide safely. Enforce immediately.**
+**Observe continuously. Adapt at AI speed. Enforce with control.**
 
 | Local-first + always-on | Business value | Demo + pitch | Technical execution |
 |---|---|---|---|
 | Full GB10 execution | Private agent control plane | Complete detect-to-block story | Layered, schema-validated, auditable |
 
 **Speaker notes (post-demo, 0:20)**
-SquidWard makes local AI operationally safe: the evidence stays private, the security agent stays on, the human stays in control, and policy is enforced where the agent acts.
+SquidWard upgrades the firewall operating model for the agentic era: continuous observation, AI-speed detection and policy recommendation, human authority, and enforcement where the agent acts.
