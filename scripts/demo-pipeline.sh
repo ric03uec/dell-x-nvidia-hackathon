@@ -19,6 +19,11 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+if curl -fsS --max-time 1 "$api_url/health" >/dev/null 2>&1; then
+  printf 'error: ingestion port %s is already in use\n' "$ingestion_port" >&2
+  exit 1
+fi
+
 if [[ ! -f "$model" ]]; then
   just --justfile "$repo_root/services/processing/justfile" \
     --working-directory "$repo_root/services/processing" train
@@ -36,6 +41,10 @@ ingestion_pid=$!
 
 for _ in $(seq 1 30); do
   if curl -fsS "$api_url/health" >/dev/null 2>&1; then
+    if ! kill -0 "$ingestion_pid" 2>/dev/null; then
+      cat "$tmp/ingestion.log" >&2
+      exit 1
+    fi
     break
   fi
   if ! kill -0 "$ingestion_pid" 2>/dev/null; then
