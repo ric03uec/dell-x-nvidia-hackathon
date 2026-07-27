@@ -75,7 +75,11 @@ services:
       # .env.example's 127.0.0.1 default (which would resolve to this
       # container's own loopback instead of the ingestion container).
       DASHBOARD_API_TARGET: http://ingestion:8100
-      VITE_ENABLE_DEMO_PAGES: ${VITE_ENABLE_DEMO_PAGES:-true}
+      # Default OFF. App.jsx tests `!== "false"`, so ONLY the literal
+      # string disables these pages — unsetting the variable leaves them
+      # visible. Removing this line would therefore re-enable them, not
+      # hide them. Override to true for a presentation build.
+      VITE_ENABLE_DEMO_PAGES: ${VITE_ENABLE_DEMO_PAGES:-false}
     depends_on:
       ingestion:
         condition: service_healthy
