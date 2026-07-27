@@ -12,14 +12,14 @@ Open [`index.html`](./index.html) in a browser. It has no package or network dep
 
 The editable source narrative and speaker notes are also in [`slides.md`](./slides.md).
 
-The main pitch is nine slides and is timed for five minutes, followed by the live demo. The tenth slide is a short post-demo close.
+The main pitch is ten slides and is timed for five minutes, followed by the live demo. The eleventh slide is a short post-demo close.
 
 ## Recommended presentation flow
 
-1. Present slides 1-9 in five minutes.
-2. Leave slide 9 visible while switching to the live demo.
+1. Present slides 1-10 in five minutes.
+2. Leave slide 10 visible while switching to the live demo.
 3. Run the normal activity, suspicious transfer, approval, and blocked retry.
-4. Return to slide 10 for the closing statement.
+4. Return to slide 11 for the closing statement.
 
 ## Claims to verify before presenting
 

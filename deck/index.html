@@ -15,12 +15,12 @@
         <div class="loop-mark" aria-hidden="true"><i></i><i></i><b>SQUID</b></div>
         <div>
           <h1>Squid<span>Ward</span></h1>
-          <p class="tagline">Autonomous defense.<br>Zero data egress.</p>
+          <p class="tagline">Firewall policy at AI speed.<br>Human control intact.</p>
         </div>
       </div>
-      <p class="lede">An always-on local security agent that detects suspicious agent behavior, investigates it on the GB10, and turns analyst-approved recommendations into enforced OpenShell policy.</p>
+      <p class="lede">AI agents connect to dynamic endpoints faster than static firewall rules can keep up. SquidWard detects behavioral risk locally and turns it into analyst-approved OpenShell policy.</p>
       <div class="footer-label">TEAM V-X / ENTERPRISE AGENT SECURITY / 01</div>
-      <aside class="notes">Open with the risk: autonomous agents take real actions. Sending their evidence to a cloud security model creates another exposure. SquidWard gives every local business agent a local defender.</aside>
+      <aside class="notes">Traditional IT firewalls were built for humans and predictable traffic. AI agents act continuously, discover tools, and connect to dynamic endpoints. Policy maintained at human speed becomes stale before the next action. SquidWard closes that speed gap without removing human control.</aside>
     </section>
 
     <section class="slide team-slide" data-title="Team V-X">
@@ -36,31 +36,31 @@
       <aside class="notes">We are team V-X: Shrivara, Brian, Devashish Meena, and Rohan. We built SquidWard as a local-first security control plane for enterprise agents.</aside>
     </section>
 
-    <section class="slide" data-title="The trust gap">
-      <div class="eyebrow">THE TRUST GAP / 03</div>
-      <h2>Cloud security can break the trust boundary it is meant to protect.</h2>
+    <section class="slide" data-title="The speed gap">
+      <div class="eyebrow">THE SPEED GAP / 03</div>
+      <h2>Traditional firewalls were built for humans and static traffic.</h2>
       <div class="split-choice">
         <article class="choice cloud">
           <span class="choice-num">A</span>
-          <h3>Send evidence<br>to the cloud</h3>
-          <p>Prompts, URLs, actions, and incident context leave the appliance.</p>
-          <div class="risk-line"><span></span>New exposure</div>
+          <h3>Human-speed<br>firewall policy</h3>
+          <p>Static destinations, manual rule changes, and ticket-driven response.</p>
+          <div class="risk-line"><span></span>Predictable traffic</div>
         </article>
-        <div class="versus">OR</div>
+        <div class="versus">VS</div>
         <article class="choice static">
           <span class="choice-num">B</span>
-          <h3>Keep evidence<br>private</h3>
-          <p>Static policy misses suspicious sequences across multiple actions.</p>
-          <div class="risk-line"><span></span>Blind spots</div>
+          <h3>AI-speed<br>agent traffic</h3>
+          <p>Autonomous actions, newly discovered tools, and dynamic endpoints.</p>
+          <div class="risk-line"><span></span>Constant change</div>
         </article>
       </div>
-      <div class="answer-strip"><strong>SquidWard removes the trade-off.</strong> Investigation and enforcement stay on the appliance.</div>
-      <aside class="notes">The evidence needed to investigate an autonomous agent is often the exact data an enterprise cannot send elsewhere. Traditional rules preserve privacy but miss sequences. Cloud AI reasons across sequences but crosses the boundary.</aside>
+      <div class="answer-strip"><strong>SquidWard closes the speed gap.</strong> It turns live agent behavior into safe, enforceable policy updates.</div>
+      <aside class="notes">The firewall is not obsolete; its operating model is. Security teams cannot manually anticipate every destination an agent may discover or update rules between machine-speed actions. SquidWard continuously observes behavior, detects risk, and prepares the policy response at AI speed.</aside>
     </section>
 
     <section class="slide" data-title="The closed loop">
       <div class="eyebrow">THE CLOSED LOOP / 04</div>
-      <h2>SquidWard closes the loop from suspicious action to enforced policy on one GB10.</h2>
+      <h2>SquidWard turns agent behavior into enforceable policy on one GB10.</h2>
       <div class="loop-flow" aria-label="Observe, detect, investigate, recommend, approve, enforce">
         <div class="flow-node"><b>01</b><strong>Observe</strong><small>OpenShell + Squid</small></div>
         <div class="flow-arrow">→</div>
@@ -74,41 +74,66 @@
         <div class="flow-arrow reverse">←</div>
         <div class="flow-node"><b>04</b><strong>Recommend</strong><small>Constrained action</small></div>
       </div>
-      <p class="outcome"><span>Outcome</span> A suspicious transfer is explained, approved, and blocked when attempted again.</p>
-      <aside class="notes">This is not another alert generator. SquidWard creates a closed response loop. It observes actions, detects anomalies, investigates locally, proposes one constrained action, waits for approval, and changes policy at the enforcement point.</aside>
+      <p class="outcome"><span>Outcome</span> AI-speed detection and policy recommendation; human-approved enforcement before the next attempt.</p>
+      <aside class="notes">SquidWard is the adaptive policy layer between autonomous agents and the firewall. It observes actions, detects anomalies, investigates locally, and proposes a constrained policy update at machine speed. The analyst retains final authority, and OpenShell enforces the approved change where the agent acts.</aside>
+    </section>
+
+    <section class="slide architecture pre-ai" data-title="Pre-AI IT Systems">
+      <div class="eyebrow">PRE-AI IT SYSTEMS / 05</div>
+      <h2>Pre-AI IT Systems</h2>
+      <div class="traffic-strip">
+        <span class="diagram-label">LIVE TRAFFIC</span>
+        <div class="diagram-card internal"><strong>Internal systems</strong><small>Users · laptops · applications</small></div>
+        <div class="diagram-arrow"><b>→</b><small>requests</small></div>
+        <div class="diagram-card firewall"><strong>Firewall</strong><small>Static rules · known destinations</small></div>
+        <div class="diagram-arrow"><b>→</b><small>allowed traffic</small></div>
+        <div class="diagram-card internet"><strong>Internet</strong><small>External destinations</small></div>
+      </div>
+      <aside class="notes">Before AI agents, enterprise traffic was comparatively predictable. Internal users and applications reached known internet destinations through firewalls maintained with static rules and human-speed updates.</aside>
     </section>
 
     <section class="slide architecture" data-title="Local architecture">
-      <div class="eyebrow">LOCAL-FIRST ARCHITECTURE / 05</div>
-      <h2>Every event, model, and inference stays inside the GB10.</h2>
-      <div class="boundary">
-        <div class="boundary-label">DELL GB10 / TRUSTED BOUNDARY</div>
-        <div class="arch-row">
-          <div class="arch-box">Business<br>agent</div><span>→</span>
-          <div class="arch-box">OpenShell</div><span>→</span>
-          <div class="arch-box">Squid</div><span>→</span>
-          <div class="arch-box storage">FastAPI<br><small>SQLite</small></div>
+      <div class="eyebrow">LOCAL-FIRST ARCHITECTURE / 06</div>
+      <h2>Traffic flows normally. SquidWard keeps the firewall current.</h2>
+      <div class="current-architecture">
+        <div class="traffic-strip">
+          <span class="diagram-label">LIVE TRAFFIC</span>
+          <div class="diagram-card internal"><strong>Internal systems</strong><small>Users · laptops · agents</small></div>
+          <div class="diagram-arrow"><b>→</b><small>requests</small></div>
+          <div class="diagram-card firewall"><strong>Firewall</strong><small>Squid Proxy today · expandable</small></div>
+          <div class="diagram-arrow"><b>→</b><small>allowed traffic</small></div>
+          <div class="diagram-card internet"><strong>Internet</strong><small>External destinations</small></div>
         </div>
-        <div class="arch-join">↓</div>
-        <div class="arch-row lower">
-          <div class="arch-box">Live rules<br><small>Isolation Forest</small></div><span>+</span>
-          <div class="arch-box gpu">PyTorch<br><small>GPU analysis</small></div><span>→</span>
-          <div class="arch-box agent">Security agent<br><small>NemoClaw + local model</small></div><span>→</span>
-          <div class="arch-box human">Analyst<br><small>Approve / reject</small></div><span>→</span>
-          <div class="arch-box">Policy<br><small>Audit</small></div>
+
+        <div class="policy-drop"><b>↕</b><span>reads current rules</span></div>
+
+        <div class="intelligence-strip">
+          <div class="diagram-card operators"><strong>IT operators</strong><small>Ask · guide · review</small></div>
+          <div class="diagram-arrow"><b>→</b><small>human input</small></div>
+
+          <div class="squidward-boundary">
+            <span class="boundary-title">SQUIDWARD / SECURE GB10 BOUNDARY</span>
+            <div class="secure-components">
+              <div class="diagram-card agent"><strong>SquidWard agent</strong><small>OpenClaw · autonomous decisions</small></div>
+              <div class="diagram-arrow"><b>→</b></div>
+              <div class="diagram-card api"><strong>API</strong><small>Questions · policy tools</small></div>
+              <div class="diagram-arrow"><b>→</b></div>
+              <div class="diagram-card compute"><strong>GB10 + local LLM</strong><small>Private reasoning</small></div>
+              <div class="db-arrow">↕</div>
+              <div class="diagram-card database"><strong>Rules database</strong><small>Private policy source of truth</small></div>
+            </div>
+            <div class="privacy-line"><strong>PRIVATE BY DESIGN</strong> Rules, questions, and inference stay inside.</div>
+          </div>
+
+          <div class="diagram-arrow external"><b>↔</b><small>scheduled scan</small></div>
+          <div class="diagram-card cve"><strong>Public CVE database</strong><small>External threat intelligence</small></div>
         </div>
       </div>
-      <div class="runtime-proof">
-        <article><span>vLLM</span><strong>MTP ON</strong><small>Higher local throughput</small></article>
-        <article><span>CONCURRENCY</span><strong>3 SEQS</strong><small><code>max-num-seqs=3</code></small></article>
-        <article><span>LiteLLM</span><strong>LIVE</strong><small>Today's token usage</small></article>
-        <article class="egress"><span>EGRESS</span><strong>0 CALLS</strong><small>No cloud fallback</small></article>
-      </div>
-      <aside class="notes">The complete data and inference path is inside one boundary. vLLM runs with multi-token prediction and max-num-seqs set to three, our max-throughput configuration that lets multiple consumers share local inference. LiteLLM meters today's token usage, giving us an observable live metric without exporting prompts or telemetry. There is no cloud fallback.</aside>
+      <aside class="notes">The top line is the network path enterprises already have: internal users, laptops, and agents send traffic through a firewall to the internet. Squid Proxy is our current firewall, with room for other adapters. Below it, SquidWard keeps policy current. IT operators work through the SquidWard agent, the agent uses the API and local GB10 model, and scheduled scans bring in public CVE intelligence. The local model and rules database both remain inside the secure boundary. The firewall reads the resulting rules without changing the traffic path.</aside>
     </section>
 
     <section class="slide" data-title="Dual-speed detection">
-      <div class="eyebrow">ALWAYS-ON DETECTION / 06</div>
+      <div class="eyebrow">ALWAYS-ON DETECTION / 07</div>
       <h2>Two detection speeds catch both obvious spikes and slow cross-action attacks.</h2>
       <div class="detectors">
         <article>
@@ -129,7 +154,7 @@
     </section>
 
     <section class="slide" data-title="Safe enforcement">
-      <div class="eyebrow">SAFE AUTONOMY / 07</div>
+      <div class="eyebrow">SAFE AUTONOMY / 08</div>
       <h2>The model recommends; a human authorizes; OpenShell enforces.</h2>
       <div class="policy-stage">
         <pre><span>policy_recommendation</span> {
@@ -150,7 +175,7 @@
     </section>
 
     <section class="slide" data-title="Measurable value">
-      <div class="eyebrow">MEASURABLE VALUE / 08</div>
+      <div class="eyebrow">MEASURABLE VALUE / 09</div>
       <h2>One workflow proves privacy, control, and prevention with four observable outcomes.</h2>
       <div class="metrics">
         <article><strong>0</strong><span>cloud LLM calls</span><small>Inference stays on GB10</small></article>
@@ -158,12 +183,12 @@
         <article><strong>2<sup>nd</sup></strong><span>attempt blocked</span><small>Prevention, not alerting</small></article>
         <article><strong>100%</strong><span>local audit trail</span><small>Evidence stays private</small></article>
       </div>
-      <div class="value-line"><span>For enterprise security teams</span> A private control plane for autonomous agents: shorter investigation cycles, enforceable guardrails, and deployment where cloud AI is not acceptable.</div>
-      <aside class="notes">The business value is observable reduction in exposure and response friction. One appliance detects the event, gives the analyst evidence needed to decide, and prevents the repeat attempt without exporting customer data.</aside>
+      <div class="value-line"><span>For enterprise security teams</span> An adaptive firewall control plane for autonomous agents: machine-speed policy recommendations, enforceable guardrails, and private local operation.</div>
+      <aside class="notes">The business value is a firewall operating model that can keep pace with agents. One appliance detects changing behavior, gives the analyst a ready-to-enforce policy decision, and prevents the repeat attempt without exporting customer data.</aside>
     </section>
 
     <section class="slide demo-slide" data-title="Live demo">
-      <div class="eyebrow">LIVE DEMO / 09</div>
+      <div class="eyebrow">LIVE DEMO / 10</div>
       <h2>Now watch the same transfer go from allowed to blocked.</h2>
       <ol class="demo-steps">
         <li><b>01</b><span><strong>Normal activity</strong>Business agent works inside OpenShell.</span></li>
@@ -177,20 +202,20 @@
     </section>
 
     <section class="slide end-slide" data-title="Close">
-      <div class="eyebrow"><span class="pulse"></span> SQUIDWARD / 10</div>
-      <h2>Autonomous agents deserve<br>a local line of defense.</h2>
-      <p class="closing">Detect locally. <span>Decide safely.</span> Enforce immediately.</p>
+      <div class="eyebrow"><span class="pulse"></span> SQUIDWARD / 11</div>
+      <h2>Agentic traffic needs a firewall<br>that can keep up.</h2>
+      <p class="closing">Observe continuously. <span>Adapt at AI speed.</span> Enforce with control.</p>
       <div class="rubric">
         <span>LOCAL-FIRST</span><span>BUSINESS VALUE</span><span>END-TO-END DEMO</span><span>TECHNICAL CONTROL</span>
       </div>
-      <aside class="notes">SquidWard makes local AI operationally safe: the evidence stays private, the security agent stays on, the human stays in control, and policy is enforced where the agent acts.</aside>
+      <aside class="notes">SquidWard upgrades the firewall operating model for the agentic era: continuous observation, AI-speed detection and policy recommendation, human authority, and enforcement where the agent acts.</aside>
     </section>
   </main>
 
   <nav class="controls" aria-label="Presentation controls">
     <button id="prev" aria-label="Previous slide">←</button>
     <div class="progress"><i id="progress"></i></div>
-    <span id="counter">01 / 10</span>
+    <span id="counter">01 / 11</span>
     <button id="notes" aria-label="Toggle speaker notes">N</button>
     <button id="fullscreen" aria-label="Toggle fullscreen">⛶</button>
     <button id="next" aria-label="Next slide">→</button>
