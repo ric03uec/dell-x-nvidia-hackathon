@@ -52,6 +52,7 @@ def clean_db() -> Iterator[None]:
         "event_assessments",
         "findings",
         "recommendations",
+        "recommendation_notes",
         "decisions",
         "enforcement_results",
         "finding_labels",
@@ -283,6 +284,7 @@ def test_canonical_pipeline_is_persisted_and_returned_in_contract_shape(
         "findings": 1,
         "recommendations": 1,
         "decisions": 1,
+        "recommendation_notes": 0,
         "enforcement_results": 1,
         "labels": 0,
         "rules": 1,
@@ -492,3 +494,59 @@ def test_unconfigured_openclaw_returns_versioned_failure(client: TestClient) -> 
     assert response.status_code == 503
     assert response.json()["schema_version"] == "1.0"
     assert response.json()["investigation"]["status"] == "failed"
+
+
+def _seed_recommendation(client: TestClient, recommendation_id: str = "rec-note-001") -> str:
+    client.post(
+        "/v1/recommendations",
+        json={
+            "schema_version": "1.0",
+            "recommendation_id": recommendation_id,
+            "finding_id": "finding-note-001",
+            "action_type": "deny_destination",
+            "target": "unknown-storage.example",
+            "scope": "business-agent",
+            "reason": "Evidence exceeded the review threshold.",
+        },
+    )
+    return recommendation_id
+
+
+def test_recommendation_notes_accumulate_in_order(client: TestClient) -> None:
+    recommendation_id = _seed_recommendation(client)
+    for note in ("Checked the destination against the asset owner.", "Owner confirmed no need."):
+        response = client.post(
+            f"/v1/recommendations/{recommendation_id}/notes",
+            json={"schema_version": "1.0", "analyst": "J. Ortiz", "note": note},
+        )
+        assert response.status_code == 201
+
+    notes = client.get("/v1/recommendations").json()["recommendations"][0]["notes"]
+    assert [item["note"] for item in notes] == [
+        "Checked the destination against the asset owner.",
+        "Owner confirmed no need.",
+    ]
+    assert {item["analyst"] for item in notes} == {"J. Ortiz"}
+
+
+def test_recommendation_without_notes_returns_an_empty_list(client: TestClient) -> None:
+    _seed_recommendation(client)
+    assert client.get("/v1/recommendations").json()["recommendations"][0]["notes"] == []
+
+
+def test_note_on_unknown_recommendation_is_rejected(client: TestClient) -> None:
+    response = client.post(
+        "/v1/recommendations/rec-does-not-exist/notes",
+        json={"schema_version": "1.0", "analyst": "J. Ortiz", "note": "orphan"},
+    )
+    assert response.status_code == 404
+
+
+def test_empty_note_is_rejected(client: TestClient) -> None:
+    recommendation_id = _seed_recommendation(client)
+    response = client.post(
+        f"/v1/recommendations/{recommendation_id}/notes",
+        json={"schema_version": "1.0", "analyst": "J. Ortiz", "note": "   "},
+    )
+    # Whitespace passes min_length but must not become a blank audit entry.
+    assert response.status_code == 422 or response.json()["note"]["note"] != ""

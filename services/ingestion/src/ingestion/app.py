@@ -6,12 +6,12 @@ import os
 import re
 import uuid
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastmcp import FastMCP
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 from . import store
 from .openclaw import OpenClawClient, OpenClawError
@@ -105,6 +105,13 @@ class VulnerabilityPolicyIn(BaseModel):
     cve_id: str
     disposition: Literal["rejected"]
     analyst: str = Field(min_length=1)
+
+
+class RecommendationNoteIn(BaseModel):
+    schema_version: Literal["1.0"]
+    # Stripped before the length check so whitespace cannot become a blank audit entry.
+    analyst: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    note: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 
 
 mcp = FastMCP("squidward-ingestion")
@@ -391,10 +398,14 @@ def post_recommendation(recommendation: RecommendationIn) -> dict[str, Any]:
 @app.get("/v1/recommendations")
 def get_recommendations(status: str | None = None) -> dict[str, Any]:
     recommendations = store.list_recommendations(conn, status)
+    notes = store.notes_for_recommendations(
+        conn, [str(item["recommendation_id"]) for item in recommendations]
+    )
     for recommendation in recommendations:
         decision = store.get_decision(conn, recommendation["recommendation_id"])
         if decision:
             recommendation["decision"] = decision
+        recommendation["notes"] = notes.get(str(recommendation["recommendation_id"]), [])
     return envelope(count=len(recommendations), recommendations=recommendations)
 
 
@@ -417,6 +428,16 @@ def post_decision(recommendation_id: str, decision: ApprovalIn) -> dict[str, Any
         raise HTTPException(404, "no such recommendation")
     recommendation["decision"] = payload
     return envelope(recommendation=recommendation, decision=payload)
+
+
+@app.post("/v1/recommendations/{recommendation_id}/notes", status_code=201)
+def post_recommendation_note(
+    recommendation_id: str, payload: RecommendationNoteIn
+) -> dict[str, Any]:
+    if store.get_recommendation(conn, recommendation_id) is None:
+        raise HTTPException(404, "no such recommendation")
+    note = store.add_recommendation_note(conn, recommendation_id, payload.analyst, payload.note)
+    return envelope(note=note)
 
 
 @app.get("/v1/policies/approved")

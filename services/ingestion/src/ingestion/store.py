@@ -73,6 +73,17 @@ CREATE TABLE IF NOT EXISTS decisions (
     payload           TEXT NOT NULL
 );
 
+-- Analyst commentary on a recommendation. Append-only: a review trail that can
+-- be edited after the fact is not evidence, so there is no update path.
+CREATE TABLE IF NOT EXISTS recommendation_notes (
+    note_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    recommendation_id TEXT NOT NULL,
+    ts                REAL NOT NULL,
+    analyst           TEXT NOT NULL,
+    note              TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_notes_rec ON recommendation_notes(recommendation_id);
+
 CREATE TABLE IF NOT EXISTS enforcement_results (
     enforcement_result_id TEXT PRIMARY KEY,
     recommendation_id     TEXT NOT NULL,
@@ -575,6 +586,13 @@ def list_recommendations(
     return [_recommendation_payload(r) for r in rows]
 
 
+def get_recommendation(conn: sqlite3.Connection, recommendation_id: str) -> dict[str, Any] | None:
+    row = conn.execute(
+        "SELECT * FROM recommendations WHERE recommendation_id = ?", (recommendation_id,)
+    ).fetchone()
+    return None if row is None else _recommendation_payload(row)
+
+
 def decide(
     conn: sqlite3.Connection,
     recommendation_id: str,
@@ -644,6 +662,49 @@ def get_decision(conn: sqlite3.Connection, recommendation_id: str) -> dict[str, 
         return None
     payload = json.loads(row["payload"])
     return payload if isinstance(payload, dict) else None
+
+
+def add_recommendation_note(
+    conn: sqlite3.Connection, recommendation_id: str, analyst: str, note: str
+) -> dict[str, Any]:
+    now = time.time()
+    cursor = conn.execute(
+        "INSERT INTO recommendation_notes(recommendation_id, ts, analyst, note) VALUES (?,?,?,?)",
+        (recommendation_id, now, analyst, note),
+    )
+    conn.commit()
+    return {
+        "note_id": cursor.lastrowid,
+        "recommendation_id": recommendation_id,
+        "analyst": analyst,
+        "note": note,
+        "timestamp": _iso(now),
+    }
+
+
+def notes_for_recommendations(
+    conn: sqlite3.Connection, recommendation_ids: list[str]
+) -> dict[str, list[dict[str, Any]]]:
+    if not recommendation_ids:
+        return {}
+    placeholders = ",".join("?" for _ in recommendation_ids)
+    rows = conn.execute(
+        f"""SELECT note_id, recommendation_id, ts, analyst, note FROM recommendation_notes
+            WHERE recommendation_id IN ({placeholders}) ORDER BY ts""",
+        recommendation_ids,
+    ).fetchall()
+    notes: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        notes.setdefault(str(row["recommendation_id"]), []).append(
+            {
+                "note_id": row["note_id"],
+                "recommendation_id": row["recommendation_id"],
+                "analyst": row["analyst"],
+                "note": row["note"],
+                "timestamp": _iso(row["ts"]),
+            }
+        )
+    return notes
 
 
 def add_label(conn: sqlite3.Connection, finding_id: str, payload: dict[str, Any]) -> None:
@@ -742,6 +803,9 @@ def clear_demo_data(conn: sqlite3.Connection) -> dict[str, int]:
         "findings": len(finding_ids),
         "recommendations": len(recommendation_ids),
         "decisions": _count_where_in(conn, "decisions", "recommendation_id", recommendation_ids),
+        "recommendation_notes": _count_where_in(
+            conn, "recommendation_notes", "recommendation_id", recommendation_ids
+        ),
         "enforcement_results": _count_where_in(
             conn, "enforcement_results", "recommendation_id", recommendation_ids
         ),
@@ -752,6 +816,7 @@ def clear_demo_data(conn: sqlite3.Connection) -> dict[str, int]:
         _delete_where_in(conn, "event_assessments", "event_id", event_ids)
         _delete_where_in(conn, "enforcement_results", "recommendation_id", recommendation_ids)
         _delete_where_in(conn, "decisions", "recommendation_id", recommendation_ids)
+        _delete_where_in(conn, "recommendation_notes", "recommendation_id", recommendation_ids)
         _delete_where_in(conn, "rules", "recommendation_id", recommendation_ids)
         _delete_where_in(conn, "finding_labels", "finding_id", finding_ids)
         _delete_where_in(conn, "recommendations", "recommendation_id", recommendation_ids)
