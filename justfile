@@ -5,7 +5,6 @@ set shell := ["bash", "-uc"]
 
 agents_dir := "agents"
 services_dir := "services"
-dashboard := "services/dashboard"
 lib := "libs/agentkit"
 template := "hello-agent"
 gb10 := "hack"
@@ -15,15 +14,13 @@ gb10 := "hack"
 default:
     @just --list
 
-# Sync the shared library venv and every agent project
+# Sync the shared library venv and every agent/service project
 [group('workspace')]
 setup:
     uv sync --project {{ lib }}
     @just each setup
-    @just s processing setup
-    pnpm --dir {{ dashboard }} install --frozen-lockfile
 
-# Lint, format-check, and typecheck the shared libs and every agent
+# Lint, format-check, and typecheck the shared libs and every agent/service
 [group('workspace')]
 check:
     uv run --project {{ lib }} ruff check {{ lib }}
@@ -32,16 +29,12 @@ check:
     @just contracts-check
     @just fixtures-check
     @just each check
-    @just s processing check
-    @just dashboard-check
 
-# Run the shared library tests and every agent's tests
+# Run the shared library tests and every agent/service's tests
 [group('workspace')]
 test:
     uv run --project {{ lib }} pytest {{ lib }}
     @just each test
-    @just s processing test
-    @just dashboard-test
 
 # Start the SquidWard dashboard locally
 [group('dashboard')]
@@ -102,12 +95,12 @@ fixtures-check:
 a name +args="check":
     @just --justfile {{ agents_dir }}/{{ name }}/justfile --working-directory {{ agents_dir }}/{{ name }} {{ args }}
 
-# Run a recipe inside every agent project: just each test
-[group('agent')]
+# Run a recipe inside every agent and service project: just each test
+[group('workspace')]
 each +args="check":
     #!/usr/bin/env bash
     set -euo pipefail
-    for d in {{ agents_dir }}/*/; do
+    for d in {{ agents_dir }}/*/ {{ services_dir }}/*/; do
       [[ -f "$d/justfile" ]] || continue
       printf '\n==> %s\n' "${d%/}"
       just --justfile "$d/justfile" --working-directory "$d" {{ args }}
@@ -149,6 +142,17 @@ gb10-up +flags="":
 gb10-status:
     @ANSIBLE_CONFIG=infra/gb10/ansible/ansible.cfg ansible-playbook -i infra/gb10/ansible/inventory.yml infra/gb10/ansible/status.yml
 
+# Show which model each inference endpoint actually serves. vLLM decides what is
+# loaded and LiteLLM decides what is advertised, and nothing reconciles them — a
+# mismatch leaves :4000 erroring while :8000 looks healthy.
+[group('gb10')]
+gb10-models:
+    @ssh {{ gb10 }} 'bin/hack-vllm-large-qwen status'
+    @printf '\nvLLM :8000 serves: '
+    @ssh {{ gb10 }} 'bin/hack-vllm-large-qwen models' | jq -r '.data[].id'
+    @printf 'LiteLLM :4000 serves: '
+    @ssh {{ gb10 }} 'bin/hack-litellm-large-qwen models' | jq -r '.data[].id'
+
 # Recover inference and the OpenClaw gateway after reboot
 [group('gb10')]
 gb10-recover +flags="":
@@ -161,3 +165,19 @@ gb10-check:
     ANSIBLE_CONFIG=infra/gb10/ansible/ansible.cfg ansible-playbook -i infra/gb10/ansible/inventory.yml infra/gb10/ansible/recover.yml --syntax-check
     ANSIBLE_CONFIG=infra/gb10/ansible/ansible.cfg ansible-playbook -i infra/gb10/ansible/inventory.yml infra/gb10/ansible/status.yml --syntax-check
     jq --exit-status 'type == "object" and all(keys[]; length > 0)' infra/openclaw/settings/openclaw.json >/dev/null
+
+# Build and start the app stack (ingestion, processing-live, dashboard), blocking until healthy
+[group('gb10')]
+gb10-app-up:
+    GIT_SHA=$(git rev-parse HEAD) docker compose -f infra/gb10/docker-compose.app.yml --project-directory . up -d --build --wait --wait-timeout 180
+
+# Print the deployed commit SHA and health of each application container
+[group('gb10')]
+gb10-app-status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for c in hack-ingestion hack-processing-live hack-dashboard; do
+      sha=$(docker inspect --format '{{{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$c" 2>/dev/null || echo "not running")
+      health=$(docker inspect --format '{{{{if .State.Health}}{{{{.State.Health.Status}}{{{{else}}{{{{.State.Status}}{{{{end}}' "$c" 2>/dev/null || echo "not running")
+      printf '%-20s sha=%-12s health=%s\n' "$c" "$sha" "$health"
+    done

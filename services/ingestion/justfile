@@ -22,5 +22,5 @@ test:
     uv run --project . pytest tests -q
 
 # Serve locally. Port 8100 per docs/ports.md — that file is the table of record.
-run port="8100" db="./events.db":
-    INGESTION_DB={{ db }} uv run --project . uvicorn ingestion.app:app --host 127.0.0.1 --port {{ port }}
+run port="8100" db="./data/exfilguard.db":
+    INGESTION_DB_PATH={{ db }} uv run --project . uvicorn ingestion.app:app --host 127.0.0.1 --port {{ port }}

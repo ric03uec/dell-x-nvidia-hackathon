@@ -1,0 +1,63 @@
+# One NemoClaw agent project — self-contained: own deps, own lock, own manifest + policy.
+# Nothing here refers to a sibling agent, so parallel worktrees never collide.
+
+set shell := ["bash", "-uc"]
+
+name := file_name(justfile_directory())
+pkg := replace(name, "-", "_")
+sandbox := env("NEMOCLAW_SANDBOX", name)
+
+# List available recipes
+[group('project')]
+default:
+    @just --list
+
+# Install this project's dependencies into its own venv
+[group('project')]
+setup:
+    uv sync
+
+# Lint, format-check, and typecheck this project
+[group('project')]
+check:
+    uv run ruff check .
+    uv run ruff format --check .
+    uv run mypy src
+
+# Auto-fix lint and formatting
+[group('project')]
+fmt:
+    uv run ruff check --fix .
+    uv run ruff format .
+
+# Run this project's tests
+[group('project')]
+test:
+    uv run pytest
+
+# Validate agents.yaml and policy.yaml without touching a sandbox
+[group('project')]
+validate:
+    uv run agentkit-validate
+
+# Run this agent's FastAPI service locally
+[group('project')]
+run port="8080":
+    uv run uvicorn {{ pkg }}.app:app --port {{ port }} --reload
+
+# Apply this agent's manifest and sandbox policy to its NemoClaw sandbox
+[group('nemoclaw')]
+apply: validate
+    nemoclaw {{ sandbox }} agents apply -f agents.yaml --yes
+    openshell policy set {{ sandbox }} --policy policy.yaml --wait
+
+# Send one turn to this agent in its sandbox
+[group('nemoclaw')]
+ask +prompt:
+    nemoclaw {{ sandbox }} agent -m "{{ prompt }}"
+
+# Show this agent's sandbox health and active inference route
+[group('nemoclaw')]
+status:
+    nemoclaw {{ sandbox }} status
+    nemoclaw {{ sandbox }} doctor

@@ -5,11 +5,17 @@ policies, ported from the nvidia-hackathon prototyping repo.
 
 ## The one rule
 
-**A worktree building agent `X` touches only `agents/X/**`.**
+**One owner per top-level component directory.** A worktree building agent `X`
+touches only its own component directory:
 
-No central registry, no shared lockfile — that's what lets parallel worktrees
-merge cleanly. Changes to `libs/`, `docs/`, or the root `justfile` are their
-own separate change.
+- `agents/business-agent`, `agents/security-agent`, `agents/hello-agent` under `agents/`
+- `services/ingestion`, `services/processing`, `services/dashboard` under `services/`
+
+`contracts/` and the root `uv.lock` (plus root `pyproject.toml` and the root
+`justfile`) are jointly-owned, review-gated shared surfaces — every component
+depends on them, so changes there need review rather than a single owner's say-so
+(see `CODEOWNERS`). If `uv.lock` conflicts, see "uv.lock conflicts" below —
+regenerate it, never hand-merge it.
 
 ## uv.lock conflicts
 
@@ -26,8 +32,8 @@ just relock          # or: just relock theirs
 
 ```bash
 just a <name> check     # lint + typecheck one agent
-just a <name> test      # its tests
-just each check         # everything
+just s <name> check     # lint + typecheck one service
+just each check         # everything, across agents/ and services/
 ```
 
 Run the check before calling work done.

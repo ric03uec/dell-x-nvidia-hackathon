@@ -2,17 +2,18 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-mock_port="${MOCK_API_PORT:-8100}"
+ingestion_port="${INGESTION_PORT:-8100}"
 dashboard_port="${DASHBOARD_PORT:-8300}"
-api_url="http://127.0.0.1:${mock_port}"
+api_url="http://127.0.0.1:${ingestion_port}"
 model="$repo_root/services/processing/artifacts/registry/isolation-forest-001.pkl"
+database="${DEMO_PIPELINE_DB:-$repo_root/data/demo-pipeline.db}"
 tmp="$(mktemp -d)"
-mock_pid=""
+ingestion_pid=""
 
 cleanup() {
-  if [[ -n "$mock_pid" ]]; then
-    kill "$mock_pid" 2>/dev/null || true
-    wait "$mock_pid" 2>/dev/null || true
+  if [[ -n "$ingestion_pid" ]]; then
+    kill "$ingestion_pid" 2>/dev/null || true
+    wait "$ingestion_pid" 2>/dev/null || true
   fi
   rm -rf "$tmp"
 }
@@ -23,17 +24,22 @@ if [[ ! -f "$model" ]]; then
     --working-directory "$repo_root/services/processing" train
 fi
 
-MOCK_PIPELINE_MODE=1 MOCK_API_PORT="$mock_port" \
-  python3 "$repo_root/services/dashboard/mocks/mock_api.py" \
-  >"$tmp/mock-api.log" 2>&1 &
-mock_pid=$!
+mkdir -p "$(dirname "$database")"
+if [[ "${DEMO_PIPELINE_RESET:-1}" == "1" ]]; then
+  rm -f "$database" "${database}-wal" "${database}-shm"
+fi
+INGESTION_DB_PATH="$database" \
+  uv run --project "$repo_root/services/ingestion" \
+    uvicorn ingestion.app:app --host 127.0.0.1 --port "$ingestion_port" \
+    >"$tmp/ingestion.log" 2>&1 &
+ingestion_pid=$!
 
 for _ in $(seq 1 30); do
   if curl -fsS "$api_url/health" >/dev/null 2>&1; then
     break
   fi
-  if ! kill -0 "$mock_pid" 2>/dev/null; then
-    cat "$tmp/mock-api.log" >&2
+  if ! kill -0 "$ingestion_pid" 2>/dev/null; then
+    cat "$tmp/ingestion.log" >&2
     exit 1
   fi
   sleep 0.2
@@ -80,7 +86,8 @@ if [[ "${DEMO_PIPELINE_NO_UI:-0}" == "1" ]]; then
 fi
 
 printf 'Dashboard: http://127.0.0.1:%s\n' "$dashboard_port"
-printf 'Mock API:  %s\n' "$api_url"
+printf 'Ingestion: %s\n' "$api_url"
+printf 'SQLite:   %s\n' "$database"
 cd "$repo_root/services/dashboard"
 if command -v pnpm >/dev/null 2>&1; then
   pnpm run dev -- --host 127.0.0.1 --port "$dashboard_port"
