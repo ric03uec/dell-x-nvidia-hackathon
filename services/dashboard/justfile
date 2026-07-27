@@ -24,21 +24,6 @@ setup:
 dev port=env("DASHBOARD_PORT", "8300"):
     pnpm run dev -- --port {{ port }}
 
-# Run the contract-shaped local API used for standalone dashboard development
-[group('project')]
-mock:
-    pnpm run mock
-
-# Run the dashboard and mock API together for standalone UI development
-[group('project')]
-demo port=env("DASHBOARD_PORT", "8300"):
-    #!/usr/bin/env bash
-    set -euo pipefail
-    pnpm run mock &
-    mock_pid=$!
-    trap 'kill "$mock_pid" 2>/dev/null || true' EXIT INT TERM
-    pnpm run dev -- --port {{ port }}
-
 # Typecheck and lint. Composed from the app's two scripts — it has no single
 # `check` script of its own.
 [group('project')]
@@ -51,7 +36,7 @@ check:
 build:
     pnpm run build
 
-# Run mock/API characterization tests and the production build gate
+# Run API client tests and the production build gate
 [group('project')]
 test:
     pnpm run test

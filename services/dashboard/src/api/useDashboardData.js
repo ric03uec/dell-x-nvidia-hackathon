@@ -40,54 +40,44 @@ export function useDashboardData(range) {
   const [summary, setSummary] = useState(null);
   const [events, setEvents] = useState(null);
   const [findings, setFindings] = useState(null);
-  const [error, setError] = useState(null);
-  const [stale, setStale] = useState(false);
+  const [summaryError, setSummaryError] = useState(null);
+  const [activityError, setActivityError] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   async function loadSummary(signal) {
-    try {
-      const [nextStatus, nextSummary] = await Promise.all([
-        getSystemStatus({ signal }),
-        getMetricsSummary(range, { signal }),
-      ]);
-      setStatus(nextStatus);
-      setSummary(nextSummary);
-      setError(null);
-      setStale(false);
-    } catch (nextError) {
-      if (nextError.code !== "ABORTED") {
-        setError(nextError);
-        setStale(true);
-      }
-    }
+    const [statusResult, summaryResult] = await Promise.allSettled([
+      getSystemStatus({ signal }),
+      getMetricsSummary(range, { signal }),
+    ]);
+    if (statusResult.status === "fulfilled") setStatus(statusResult.value);
+    if (summaryResult.status === "fulfilled") setSummary(summaryResult.value);
+    const nextError = [statusResult, summaryResult]
+      .find((result) => result.status === "rejected" && result.reason.code !== "ABORTED");
+    setSummaryError(nextError?.reason ?? null);
   }
 
   async function loadActivity(signal) {
-    try {
-      const [nextEvents, nextFindings] = await Promise.all([
-        getEvents({ signal }),
-        getFindings({ signal }),
-      ]);
-      setEvents(nextEvents);
-      setFindings(nextFindings);
-      setError(null);
-    } catch (nextError) {
-      if (nextError.code !== "ABORTED") {
-        setError(nextError);
-        setStale(true);
-      }
-    }
+    const [eventsResult, findingsResult] = await Promise.allSettled([
+      getEvents({ signal }),
+      getFindings({ signal }),
+    ]);
+    if (eventsResult.status === "fulfilled") setEvents(eventsResult.value);
+    if (findingsResult.status === "fulfilled") setFindings(findingsResult.value);
+    const nextError = [eventsResult, findingsResult]
+      .find((result) => result.status === "rejected" && result.reason.code !== "ABORTED");
+    setActivityError(nextError?.reason ?? null);
   }
 
   usePolling(loadSummary, 30_000, [range, refreshKey]);
   usePolling(loadActivity, 5_000, [refreshKey]);
 
+  const error = activityError ?? summaryError;
   return {
     error,
     events,
     findings,
     refresh: () => setRefreshKey((value) => value + 1),
-    stale,
+    stale: error !== null,
     status,
     summary,
   };

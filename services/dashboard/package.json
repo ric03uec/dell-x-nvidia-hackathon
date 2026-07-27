@@ -8,12 +8,10 @@
   "packageManager": "pnpm@11.17.0",
   "scripts": {
     "dev": "vite",
-    "mock": "python3 mocks/mock_api.py",
     "build": "vite build",
     "start": "vite preview",
-    "test": "pnpm run test:mock && pnpm run test:api && pnpm run build",
+    "test": "pnpm run test:api && pnpm run build",
     "test:api": "node --test src/api/*.test.js",
-    "test:mock": "python3 -m unittest discover -s mocks -p 'test_*.py' -v",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit"
   },

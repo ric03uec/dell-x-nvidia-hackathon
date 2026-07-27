@@ -21,10 +21,12 @@ test("submits only the versioned explicit recommendation decision", async () => 
   }
 
   assert.equal(captured.url, "/api/v1/recommendations/rec%2Fone/decision");
-  assert.deepEqual(JSON.parse(captured.options.body), {
-    schema_version: "1.0",
-    decision: "approved",
-  });
+  const body = JSON.parse(captured.options.body);
+  assert.equal(body.schema_version, "1.0");
+  assert.equal(body.recommendation_id, "rec/one");
+  assert.equal(body.decision, "approved");
+  assert.equal(body.analyst, "local-analyst");
+  assert.equal(Number.isNaN(Date.parse(body.timestamp)), false);
 });
 
 test("rejects unsupported response schema versions", async () => {

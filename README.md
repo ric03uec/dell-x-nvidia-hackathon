@@ -16,13 +16,12 @@ just each test             # tests everywhere
 just a hello-agent run     # run one agent's service locally
 just dashboard-setup       # install the SquidWard dashboard dependencies
 just dashboard-dev         # run the dashboard locally
-just s dashboard mock      # run the standalone contract-shaped mock API
-just dashboard-demo        # run SquidWard with preloaded mock data
+just dashboard-demo        # run the real local ingestion pipeline and dashboard
 just demo-pipeline         # generate → ingest → detect → recommend → dashboard
 ```
 
-`just demo-pipeline` starts the durable SQLite ingestion API, posts all 26
-synthetic events, runs them through deterministic rules and the promoted
+`just demo-pipeline` starts the durable SQLite ingestion API, posts 22
+deterministic input events, runs them through deterministic rules and the promoted
 Isolation Forest, stores the resulting finding and constrained recommendation,
 and launches the dashboard at `http://127.0.0.1:8300`. Data remains available
 in `data/demo-pipeline.db` after the demo stops. Set `DEMO_PIPELINE_RESET=0` to
@@ -47,15 +46,13 @@ unified-memory usage from `/proc/meminfo`. Configure `.env`, then run:
 
 ```bash
 just doctor local
-set -a
-source .env
-set +a
-just dashboard-demo
+just gb10-up
+just gb10-app-up
 ```
 
 From a workstation, `just doctor <ssh-host>` performs the same readiness checks
-over SSH. The dashboard binds to `MGMT_BIND_ADDR` and keeps the mock API and
-LiteLLM credentials on the GB10 loopback interface.
+over SSH. The dashboard binds to `MGMT_BIND_ADDR`; ingestion, FastMCP, OpenClaw,
+and LiteLLM remain on host-local or private container interfaces.
 
 ## Add an agent
 

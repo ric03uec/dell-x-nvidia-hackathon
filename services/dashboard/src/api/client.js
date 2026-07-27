@@ -155,10 +155,17 @@ export function getRecommendations(status, options) {
 }
 
 export function submitRecommendationDecision(id, decision, options) {
+  const { analyst = "local-analyst", ...requestOptions } = options ?? {};
   return request(`/recommendations/${encodeURIComponent(id)}/decision`, {
-    ...options,
+    ...requestOptions,
     method: "POST",
-    body: { schema_version: SCHEMA_VERSION, decision },
+    body: {
+      schema_version: SCHEMA_VERSION,
+      recommendation_id: id,
+      decision,
+      analyst,
+      timestamp: new Date().toISOString(),
+    },
   });
 }
 
