@@ -217,9 +217,17 @@ class Runner:
                 continue
             row = by_dest.setdefault(
                 dest,
-                {"destination": dest, "bytes_up": 0, "requests": 0, "has_history": dest in ROUTINE},
+                {
+                    "destination": dest,
+                    "bytes_up": 0,
+                    "requests": 0,
+                    "has_history": dest in ROUTINE,
+                    "event_ids": [],
+                },
             )
             row["bytes_up"] += int(e.get("req_bytes") or 0)
+            if len(row["event_ids"]) < 20 and e.get("event_id"):
+                row["event_ids"].append(e["event_id"])
             row["requests"] += 1
         candidates = sorted(by_dest.values(), key=lambda r: -r["bytes_up"])[:8]
         evidence = {c["destination"]: c["event_ids"] for c in candidates}
@@ -264,7 +272,9 @@ class Runner:
                         "summary": d.reason,
                         "risk_score": 95 if d.severity == "critical" else 80,
                         "severity": d.severity,
-                        "event_ids": [],
+                        # Non-empty is enforced by the tool schema, and a
+                        # finding without evidence is unexplainable anyway.
+                        "event_ids": evidence.get(d.destination, [])[:20],
                     },
                 )
                 res = await client.call_tool(
