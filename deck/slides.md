@@ -1,6 +1,6 @@
 # SquidWard
 
-## Firewall policy at AI speed. Human control intact.
+## Enterprise IT firewall at AI speed. Human control intact.
 
 **Dell x NVIDIA Hackathon 2026**
 
