@@ -62,7 +62,21 @@ def _register_mcp(name: str = "squidward") -> str:
     so a failure here means OpenClaw genuinely could not reach the endpoint."""
     try:
         out = subprocess.run(  # noqa: S603
-            ["openclaw", "mcp", "add", name, "--url", MCP_URL],  # noqa: S607
+            # --transport streamable-http is REQUIRED. FastMCP's http_app
+            # speaks Streamable HTTP; OpenClaw defaults to SSE and the probe
+            # fails with "SSE error: Non-200 status code (400)", which reads
+            # like the endpoint is broken rather than like a transport
+            # mismatch.
+            [
+                "openclaw",
+                "mcp",
+                "add",
+                name,  # noqa: S607
+                "--url",
+                MCP_URL,
+                "--transport",
+                "streamable-http",
+            ],
             capture_output=True,
             text=True,
             timeout=90,
