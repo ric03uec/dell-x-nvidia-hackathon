@@ -4,6 +4,8 @@ import {
   getEnforcementResults,
   getFinding,
   getRecommendations,
+  rejectVulnerability,
+  restoreVulnerability,
   startFindingInvestigation,
   submitRecommendationDecision,
   toMetricStrip,
@@ -99,6 +101,7 @@ function App() {
   const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || "dark");
   const [incident, setIncident] = useState(null);
   const [decisionPending, setDecisionPending] = useState(false);
+  const [cvePolicyPending, setCvePolicyPending] = useState(null);
   const [title, scope, context] = pageMeta[activePage];
   const needle = query.trim().toLowerCase();
   const live = useDashboardData(range);
@@ -210,6 +213,21 @@ function App() {
     }
   }
 
+  async function changeCvePolicy(action, cveId) {
+    if (cvePolicyPending) return;
+    setCvePolicyPending(cveId);
+    try {
+      if (action === "reject") await rejectVulnerability(cveId);
+      else await restoreVulnerability(cveId);
+      live.refresh();
+      notify(`${cveId} ${action === "reject" ? "added to reject policy" : "restored"}`);
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setCvePolicyPending(null);
+    }
+  }
+
   return (
     <div className="app">
       <Sidebar activePage={activePage} onNavigate={setActivePage} status={system.appliance} />
@@ -298,7 +316,14 @@ function App() {
           ) : activePage === "events" ? (
             <LiveEventsPage events={liveEvents} metrics={overviewMetrics} needle={needle} onOpenIncident={openIncident} />
           ) : activePage === "cve" ? (
-            <DataPage data={cvePage} error={live.vulnerabilityError} needle={needle} notify={notify} />
+            <DataPage
+              data={cvePage}
+              error={live.vulnerabilityError}
+              needle={needle}
+              notify={notify}
+              onAction={changeCvePolicy}
+              pendingAction={cvePolicyPending}
+            />
           ) : activePage === "feedback" ? (
             <DataPage data={feedbackPage} error={live.error} needle={needle} notify={notify} />
           ) : DEMO_PAGES_ENABLED && demoPageData[activePage] ? (
@@ -745,7 +770,7 @@ function DrawerSection({ children, meta, title }) {
   );
 }
 
-function DataPage({ data, error, notify, needle }) {
+function DataPage({ data, error, notify, needle, onAction, pendingAction }) {
   const visible = data.rows.filter((row) => matches(row, needle));
   const total = data.columns.reduce((sum, item) => sum + parseFloat(item.width), 0);
 
@@ -780,7 +805,13 @@ function DataPage({ data, error, notify, needle }) {
               return (
                 <tr key={label} onClick={open} onKeyDown={activateOnKey(open)} tabIndex={0}>
                   {row.map((cell, cellIndex) => (
-                    <Cell align={data.columns[cellIndex].align} cell={cell} key={data.columns[cellIndex].key} />
+                    <Cell
+                      align={data.columns[cellIndex].align}
+                      cell={cell}
+                      key={data.columns[cellIndex].key}
+                      onAction={onAction}
+                      pendingAction={pendingAction}
+                    />
                   ))}
                 </tr>
               );
@@ -792,7 +823,7 @@ function DataPage({ data, error, notify, needle }) {
   );
 }
 
-function Cell({ cell, align }) {
+function Cell({ cell, align, onAction, pendingAction }) {
   if (Array.isArray(cell)) {
     return (
       <td>
@@ -803,6 +834,23 @@ function Cell({ cell, align }) {
   }
   if (cell && typeof cell === "object") {
     if (typeof cell.risk === "number") return <td><RiskMeter risk={cell.risk} /></td>;
+    if (cell.action) {
+      return (
+        <td>
+          <button
+            className="ghost-button cve-policy-button"
+            disabled={Boolean(pendingAction)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onAction?.(cell.action, cell.cveId);
+            }}
+            type="button"
+          >
+            {pendingAction === cell.cveId ? "Saving…" : cell.label}
+          </button>
+        </td>
+      );
+    }
     return <td><span className={`badge ${cell.level}`}><i />{cell.badge}</span></td>;
   }
   return <td className={`${align === "right" ? "num mono" : ""}`}>{cell}</td>;

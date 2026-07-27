@@ -111,6 +111,13 @@ CREATE TABLE IF NOT EXISTS rules (
     recommendation_id TEXT,
     approved_by       TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS vulnerability_policies (
+    cve_id       TEXT PRIMARY KEY,
+    disposition TEXT NOT NULL CHECK(disposition = 'rejected'),
+    actor        TEXT NOT NULL,
+    ts           REAL NOT NULL
+);
 """
 
 
@@ -429,6 +436,46 @@ def get_investigation(conn: sqlite3.Connection, finding_id: str) -> dict[str, An
     if investigation["error"] is None:
         investigation.pop("error")
     return investigation
+
+
+def put_vulnerability_policy(conn: sqlite3.Connection, cve_id: str, actor: str) -> dict[str, Any]:
+    now = time.time()
+    conn.execute(
+        """
+        INSERT INTO vulnerability_policies(cve_id, disposition, actor, ts)
+        VALUES (?, 'rejected', ?, ?)
+        ON CONFLICT(cve_id) DO UPDATE SET actor=excluded.actor, ts=excluded.ts
+        """,
+        (cve_id, actor, now),
+    )
+    conn.commit()
+    return {
+        "cve_id": cve_id,
+        "disposition": "rejected",
+        "analyst": actor,
+        "created_at": datetime.fromtimestamp(now, timezone.utc).isoformat(),
+    }
+
+
+def list_vulnerability_policies(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        "SELECT cve_id, disposition, actor, ts FROM vulnerability_policies ORDER BY ts DESC"
+    ).fetchall()
+    return [
+        {
+            "cve_id": row["cve_id"],
+            "disposition": row["disposition"],
+            "analyst": row["actor"],
+            "created_at": datetime.fromtimestamp(row["ts"], timezone.utc).isoformat(),
+        }
+        for row in rows
+    ]
+
+
+def delete_vulnerability_policy(conn: sqlite3.Connection, cve_id: str) -> bool:
+    cursor = conn.execute("DELETE FROM vulnerability_policies WHERE cve_id = ?", (cve_id,))
+    conn.commit()
+    return cursor.rowcount > 0
 
 
 def add_recommendation(

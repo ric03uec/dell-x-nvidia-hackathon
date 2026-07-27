@@ -58,6 +58,7 @@ def clean_db() -> Iterator[None]:
         "investigations",
         "snapshots",
         "rules",
+        "vulnerability_policies",
     ):
         conn.execute(f"DELETE FROM {table}")
     conn.commit()
@@ -114,6 +115,66 @@ def test_event_assessment_is_returned_with_the_event(client: TestClient) -> None
     event = client.get("/v1/events").json()["events"][0]
     assert event["risk_score"] == 17.25
     assert event["model_version"] == "rules-001"
+
+
+def test_vulnerabilities_are_returned_from_the_server_side_feed(client: TestClient) -> None:
+    class StubFeed:
+        def get(self, limit: int) -> dict[str, Any]:
+            assert limit == 5
+            return {
+                "source": "CISA Known Exploited Vulnerabilities",
+                "count": 1,
+                "shown": 1,
+                "stale": False,
+                "vulnerabilities": [{"cve_id": "CVE-2026-12345"}],
+            }
+
+    original = app.state.vulnerability_feed
+    app.state.vulnerability_feed = StubFeed()
+    try:
+        response = client.get("/v1/vulnerabilities", params={"limit": 5})
+    finally:
+        app.state.vulnerability_feed = original
+
+    assert response.status_code == 200
+    assert response.json()["vulnerabilities"][0]["cve_id"] == "CVE-2026-12345"
+
+
+def test_vulnerability_rejection_policy_is_persisted_and_reversible(
+    client: TestClient,
+) -> None:
+    payload = {
+        "schema_version": "1.0",
+        "cve_id": "CVE-2026-12345",
+        "disposition": "rejected",
+        "analyst": "local-analyst",
+    }
+
+    created = client.post("/v1/vulnerability-policies/CVE-2026-12345", json=payload)
+    assert created.status_code == 201
+    assert created.json()["policy"]["disposition"] == "rejected"
+
+    policies = store.list_vulnerability_policies(conn)
+    assert policies[0]["cve_id"] == "CVE-2026-12345"
+    assert policies[0]["analyst"] == "local-analyst"
+
+    removed = client.delete("/v1/vulnerability-policies/CVE-2026-12345")
+    assert removed.status_code == 200
+    assert removed.json()["removed"] is True
+    assert store.list_vulnerability_policies(conn) == []
+
+
+def test_vulnerability_policy_rejects_mismatched_cve_id(client: TestClient) -> None:
+    response = client.post(
+        "/v1/vulnerability-policies/CVE-2026-12345",
+        json={
+            "schema_version": "1.0",
+            "cve_id": "CVE-2026-99999",
+            "disposition": "rejected",
+            "analyst": "local-analyst",
+        },
+    )
+    assert response.status_code == 400
 
 
 def test_unknown_fields_are_preserved_not_rejected(client: TestClient) -> None:

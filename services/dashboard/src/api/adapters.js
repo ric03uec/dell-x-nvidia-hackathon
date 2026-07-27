@@ -68,17 +68,20 @@ export function toRiskEvents(projections) {
 
 export function toCvePage(catalog) {
   const vulnerabilities = Array.isArray(catalog?.vulnerabilities) ? catalog.vulnerabilities : [];
+  const rejected = new Set(
+    (Array.isArray(catalog?.policies) ? catalog.policies : [])
+      .filter((policy) => policy.disposition === "rejected")
+      .map((policy) => policy.cve_id),
+  );
   const ransomware = vulnerabilities.filter((item) => item.ransomware_use === "Known").length;
-  const today = new Date().toISOString().slice(0, 10);
-  const overdue = vulnerabilities.filter((item) => item.due_date && item.due_date < today).length;
   const fetched = formatTimestamp(catalog?.fetched_at, { includeDate: true });
 
   return {
     metrics: [
       ["KEVs tracked", present(catalog?.count), UNAVAILABLE, "neutral", []],
-      ["Recent entries", String(vulnerabilities.length), UNAVAILABLE, "neutral", []],
+      ["High-risk entries", String(vulnerabilities.length), UNAVAILABLE, "neutral", []],
       ["Ransomware linked", String(ransomware), UNAVAILABLE, "negative", []],
-      ["Remediation overdue", String(overdue), UNAVAILABLE, overdue ? "negative" : "positive", []],
+      ["Rejected locally", String(rejected.size), UNAVAILABLE, "positive", []],
     ],
     title: "CISA KEV Watchlist",
     meta: catalog ? `${catalog.stale ? "Stale cache" : "Live feed"} · fetched ${fetched}` : "Waiting for CISA KEV",
@@ -88,13 +91,21 @@ export function toCvePage(catalog) {
       { key: "due", label: "Remediate by", width: ".65fr" },
       { key: "ransomware", label: "Ransomware", width: ".7fr" },
       { key: "status", label: "Status", width: ".65fr" },
+      { key: "policy", label: "Policy", width: ".6fr" },
     ],
     rows: vulnerabilities.map((item) => [
       [item.cve_id, [item.vendor, item.product].filter(Boolean).join(" · ") || "Product unavailable"],
       present(item.date_added),
       present(item.due_date),
       present(item.ransomware_use),
-      { badge: "Known exploited", level: item.ransomware_use === "Known" ? "critical" : "high" },
+      rejected.has(item.cve_id)
+        ? { badge: "Rejected", level: "muted" }
+        : { badge: "High risk", level: item.ransomware_use === "Known" ? "critical" : "high" },
+      {
+        action: rejected.has(item.cve_id) ? "restore" : "reject",
+        cveId: item.cve_id,
+        label: rejected.has(item.cve_id) ? "Restore" : "Reject",
+      },
     ]),
   };
 }

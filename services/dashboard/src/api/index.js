@@ -9,6 +9,8 @@ export {
   getSystemStatus,
   getVulnerabilities,
   request,
+  rejectVulnerability,
+  restoreVulnerability,
   startFindingInvestigation,
   submitRecommendationDecision,
 } from "./client.js";

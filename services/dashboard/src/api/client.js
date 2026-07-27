@@ -138,6 +138,31 @@ export function getFindings(options) {
   return request("/findings", options);
 }
 
+export function getVulnerabilities(options) {
+  return request("/vulnerabilities", options);
+}
+
+export function rejectVulnerability(cveId, options) {
+  const { analyst = "local-analyst", ...requestOptions } = options ?? {};
+  return request(`/vulnerability-policies/${encodeURIComponent(cveId)}`, {
+    ...requestOptions,
+    method: "POST",
+    body: {
+      schema_version: SCHEMA_VERSION,
+      cve_id: cveId,
+      disposition: "rejected",
+      analyst,
+    },
+  });
+}
+
+export function restoreVulnerability(cveId, options) {
+  return request(`/vulnerability-policies/${encodeURIComponent(cveId)}`, {
+    ...options,
+    method: "DELETE",
+  });
+}
+
 export function getFinding(id, options) {
   return request(`/findings/${encodeURIComponent(id)}`, options);
 }

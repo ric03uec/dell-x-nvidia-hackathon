@@ -43,6 +43,7 @@ test("adapts the live CISA KEV feed without inventing asset or CVSS data", () =>
     count: 1653,
     fetched_at: "2026-07-26T14:00:00Z",
     stale: false,
+    policies: [{ cve_id: "CVE-2026-12345", disposition: "rejected" }],
     vulnerabilities: [{
       cve_id: "CVE-2026-12345",
       vendor: "Example Vendor",
@@ -55,10 +56,16 @@ test("adapts the live CISA KEV feed without inventing asset or CVSS data", () =>
 
   assert.equal(page.title, "CISA KEV Watchlist");
   assert.deepEqual(page.columns.map((column) => column.label), [
-    "CVE ID", "Added", "Remediate by", "Ransomware", "Status",
+    "CVE ID", "Added", "Remediate by", "Ransomware", "Status", "Policy",
   ]);
   assert.deepEqual(page.rows[0][0], ["CVE-2026-12345", "Example Vendor · Gateway"]);
-  assert.equal(page.rows[0][4].badge, "Known exploited");
+  assert.equal(page.rows[0][4].badge, "Rejected");
+  assert.deepEqual(page.rows[0][5], {
+    action: "restore",
+    cveId: "CVE-2026-12345",
+    label: "Restore",
+  });
+  assert.equal(page.metrics[3][1], "1");
 });
 
 test("adapts analyst decisions without inventing review timings", () => {

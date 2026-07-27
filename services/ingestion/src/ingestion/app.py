@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import uuid
 from pathlib import Path
 from typing import Any, Literal
@@ -15,6 +16,7 @@ from pydantic import BaseModel, Field
 from . import store
 from .openclaw import OpenClawClient, OpenClawError
 from .runtime import GpuTelemetryCollector, inference_status, observed_at
+from .vulnerabilities import CisaKevFeed, VulnerabilityFeedError
 
 SCHEMA_VERSION = "1.0"
 DB_PATH = os.environ.get("INGESTION_DB_PATH", os.environ.get("INGESTION_DB", "data/exfilguard.db"))
@@ -96,6 +98,13 @@ class ApprovalIn(BaseModel):
     decision: Literal["approved", "rejected"]
     analyst: str = Field(min_length=1)
     timestamp: str
+
+
+class VulnerabilityPolicyIn(BaseModel):
+    schema_version: Literal["1.0"]
+    cve_id: str
+    disposition: Literal["rejected"]
+    analyst: str = Field(min_length=1)
 
 
 mcp = FastMCP("squidward-ingestion")
@@ -201,6 +210,7 @@ app = FastAPI(title="squidward-ingestion", lifespan=mcp_app.lifespan)
 app.mount("/mcp", mcp_app)
 app.state.gpu_collector = GpuTelemetryCollector()
 app.state.openclaw = OpenClawClient.from_env()
+app.state.vulnerability_feed = CisaKevFeed()
 
 
 @app.get("/health")
@@ -248,6 +258,32 @@ def get_events(
                 event.setdefault("risk_score", finding["risk_score"])
                 break
     return envelope(count=len(events), events=events)
+
+
+@app.get("/v1/vulnerabilities")
+def get_vulnerabilities(
+    request: Request, limit: int = Query(default=25, ge=1, le=100)
+) -> dict[str, Any]:
+    try:
+        catalog = request.app.state.vulnerability_feed.get(limit)
+    except VulnerabilityFeedError as error:
+        raise HTTPException(503, str(error)) from error
+    return envelope(**catalog, policies=store.list_vulnerability_policies(conn))
+
+
+@app.post("/v1/vulnerability-policies/{cve_id}", status_code=201)
+def post_vulnerability_policy(cve_id: str, policy: VulnerabilityPolicyIn) -> dict[str, Any]:
+    if policy.cve_id != cve_id:
+        raise HTTPException(400, "cve_id does not match path")
+    if not re.fullmatch(r"CVE-\d{4}-\d{4,}", cve_id):
+        raise HTTPException(400, "cve_id must be a valid CVE identifier")
+    persisted = store.put_vulnerability_policy(conn, cve_id, policy.analyst)
+    return envelope(policy=persisted)
+
+
+@app.delete("/v1/vulnerability-policies/{cve_id}")
+def delete_vulnerability_policy(cve_id: str) -> dict[str, Any]:
+    return envelope(cve_id=cve_id, removed=store.delete_vulnerability_policy(conn, cve_id))
 
 
 @app.post("/v1/event-assessments", status_code=201)

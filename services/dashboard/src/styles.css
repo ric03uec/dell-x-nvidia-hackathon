@@ -459,6 +459,8 @@ ol { padding: 0; list-style: none; }
 }
 
 .ghost-button:hover { background: var(--panel-hover); color: var(--text); }
+.cve-policy-button { min-width: 64px; padding: 4px 8px; }
+.cve-policy-button:disabled { cursor: wait; opacity: .55; }
 
 .primary-button {
   height: 24px;
