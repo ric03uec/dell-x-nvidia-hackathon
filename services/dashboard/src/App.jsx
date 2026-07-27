@@ -461,7 +461,7 @@ function Dashboard({ findings, notify, range, system, theme, needle, events, met
         <Panel
           action={<span className="panel-badge">{range}</span>}
           className="chart-panel"
-          meta="Persisted finding scores only"
+          meta="Rolling event-assessment buckets"
           title="Observed risk trend"
         >
           <RiskTrendChart events={events} theme={theme} />
@@ -814,7 +814,7 @@ function RiskMeter({ risk }) {
 
 function RiskTrendChart({ events, theme }) {
   const canvasRef = useRef(null);
-  const live = useMemo(
+  const scores = useMemo(
     () => events
       .filter((event) => typeof event.risk === "number")
       .slice()
@@ -822,6 +822,15 @@ function RiskTrendChart({ events, theme }) {
       .map((event) => event.risk),
     [events],
   );
+  const live = useMemo(() => {
+    const bucketSize = Math.max(1, Math.ceil(scores.length / 24));
+    const buckets = [];
+    for (let index = 0; index < scores.length; index += bucketSize) {
+      const bucket = scores.slice(index, index + bucketSize);
+      buckets.push(bucket.reduce((sum, value) => sum + value, 0) / bucket.length);
+    }
+    return buckets;
+  }, [scores]);
   const baseline = useMemo(
     () => live.map((_, index) => {
       const window = live.slice(Math.max(0, index - 4), index + 1);
@@ -925,14 +934,14 @@ function RiskTrendChart({ events, theme }) {
     return <div className="drawer-message">Risk trend requires at least two assessed events.</div>;
   }
 
-  const peak = Math.round(Math.max(...live));
-  const average = (live.reduce((sum, value) => sum + value, 0) / live.length).toFixed(1);
+  const peak = Math.round(Math.max(...scores));
+  const average = (scores.reduce((sum, value) => sum + value, 0) / scores.length).toFixed(1);
 
   return (
     <div className="chart">
       <div className="chart-body"><canvas ref={canvasRef} /></div>
       <div className="legend">
-        <span><i className="live" />Live risk score</span>
+        <span><i className="live" />Bucketed event risk</span>
         <span><i className="baseline" />Observed rolling mean</span>
         <span className="legend-right mono">peak {peak} · avg {average}</span>
       </div>

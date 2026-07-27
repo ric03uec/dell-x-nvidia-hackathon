@@ -612,9 +612,9 @@ ol { padding: 0; list-style: none; }
 
 /* ---------- chart ---------- */
 
-.chart-panel { min-height: 268px; }
+.chart-panel { height: 268px; min-height: 268px; max-height: 268px; overflow: hidden; }
 .chart { display: flex; flex: 1; min-height: 0; flex-direction: column; padding: 8px 8px 0; }
-.chart-body { position: relative; flex: 1; min-height: 180px; }
+.chart-body { position: relative; flex: 1; min-height: 0; }
 
 /* Absolute so the canvas intrinsic aspect ratio cannot feed back into flex sizing. */
 .chart-body canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
