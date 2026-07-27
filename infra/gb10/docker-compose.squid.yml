@@ -17,6 +17,10 @@ services:
       - "0.0.0.0:3128:3128"
     volumes:
       - /home/dell/vllm/squid/squid.conf:/etc/squid/squid.conf:ro
+      # A DIRECTORY, not the file: sync-denylist.sh replaces domains.txt
+      # atomically via mv, which changes the inode and would silently detach a
+      # single-file bind mount.
+      - /home/dell/vllm/squid/denylist:/etc/squid/denylist:ro
       - hack-squid-logs:/var/log/squid
 
   # Demo only. Stands in for every destination in services/demo's catalog so
