@@ -159,18 +159,39 @@
       <aside class="notes">Autonomous defense cannot mean autonomous privilege escalation. The model only recommends an allowlisted action. A human approves it. The adapter validates it again before the agent applies it, and the result becomes an audit event.</aside>
     </section>
 
-    <section class="slide demo-slide" data-title="Live demo">
-      <div class="eyebrow">LIVE DEMO / 09</div>
-      <h2>Now watch the same transfer go from allowed to blocked.</h2>
-      <ol class="demo-steps">
-        <li><b>01</b><span><strong>Normal activity</strong>Business agent works inside OpenShell.</span></li>
-        <li><b>02</b><span><strong>Suspicious sequence</strong>Data is staged and uploaded to a new destination.</span></li>
-        <li><b>03</b><span><strong>Local response</strong>SquidWard detects, investigates, and recommends.</span></li>
-        <li><b>04</b><span><strong>Human control</strong>The analyst approves a constrained policy.</span></li>
-        <li><b>05</b><span><strong>Enforcement</strong>The repeated transfer is blocked and audited.</span></li>
-      </ol>
-      <div class="watch"><span>WATCH</span><b>Incident timeline</b><i>→</i><b>Policy review</b><i>→</i><b>Enforcement audit</b></div>
-      <aside class="notes">The first transfer gives us evidence; the second proves prevention. Watch the incident timeline, the policy review and human gate, and the enforcement audit for the blocked result. Switch to the live demo.</aside>
+    <section class="slide stack-slide" data-title="Technology stack">
+      <div class="eyebrow">TECHNOLOGY STACK / 09</div>
+      <h2>One GB10 runs the entire agent security stack.</h2>
+      <div class="stack-diagram" aria-label="SquidWard technology stack">
+        <section class="stack-layer experience-layer">
+          <div class="layer-label"><b>04</b><span>ANALYST<br>EXPERIENCE</span></div>
+          <div class="layer-block ui-block"><small>WEB CONSOLE</small><strong>React + Vite</strong><span>Incidents · approvals · audit</span></div>
+          <div class="stack-arrow">↔</div>
+          <div class="layer-block api-block"><small>APPLICATION APIs</small><strong>FastAPI + FastMCP</strong><span>REST · MCP tools · policy surface</span></div>
+        </section>
+        <section class="stack-layer control-layer">
+          <div class="layer-label"><b>03</b><span>AGENT +<br>CONTROL</span></div>
+          <div class="layer-block proxy-block"><small>TRAFFIC PLANE</small><strong>Squid Proxy 6.6</strong><span>Observe · allow · deny</span></div>
+          <div class="stack-arrow">→</div>
+          <div class="layer-block services-block"><small>PYTHON SERVICES</small><strong>Ingest + Detect + Store</strong><span>Collector · models · SQLite</span></div>
+          <div class="stack-arrow">→</div>
+          <div class="layer-block agent-block"><small>AGENT RUNTIME</small><strong>OpenClaw</strong><span>Investigate · explain · recommend</span></div>
+        </section>
+        <section class="stack-layer inference-layer">
+          <div class="layer-label"><b>02</b><span>LOCAL<br>INFERENCE</span></div>
+          <div class="layer-block gateway-block"><small>MODEL GATEWAY</small><strong>LiteLLM</strong><span>Auth + OpenAI-compatible API</span></div>
+          <div class="stack-arrow">→</div>
+          <div class="layer-block runtime-block"><small>GPU SERVING</small><strong>vLLM</strong><span>High-throughput inference</span></div>
+          <div class="stack-arrow">→</div>
+          <div class="layer-block model-block"><small>LOCAL MODEL</small><strong>Qwen3.6-27B-FP8</strong><span>Reasoning + tool use</span></div>
+        </section>
+        <section class="stack-layer compute-layer">
+          <div class="layer-label"><b>01</b><span>COMPUTE<br>FOUNDATION</span></div>
+          <div class="compute-lockup"><strong>Dell Pro Max with GB10</strong><span>NVIDIA GB10 · CUDA 13 · Docker · 128GB unified memory</span></div>
+          <div class="local-seal"><b>100%</b><span>LOCAL + PRIVATE</span></div>
+        </section>
+      </div>
+      <aside class="notes">The whole stack runs on one Dell Pro Max with NVIDIA GB10. Docker and CUDA support a local Qwen 3.6 27B FP8 model served by vLLM and routed through LiteLLM. OpenClaw handles investigation and recommendation. Python services ingest, detect, and store evidence; Squid observes and enforces traffic; and the React console gives analysts the approval and audit surface.</aside>
     </section>
 
     <section class="slide stats-slide" data-title="Stats for today">
