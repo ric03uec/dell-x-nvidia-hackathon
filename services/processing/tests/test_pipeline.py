@@ -7,13 +7,20 @@ from pathlib import Path
 from processing.anomaly import IsolationForestModel, safe_load
 from processing.dataset import augmented_normal_windows
 from processing.features import extract_features
-from processing.inference import MockInvestigator
 from processing.pipeline import detect_window, recommend_policy
 
 ROOT = Path(__file__).parents[3]
 NORMAL = json.loads((ROOT / "fixtures/expected/normal.json").read_text())
 SUSPICIOUS = json.loads((ROOT / "fixtures/expected/suspicious.json").read_text())
 KNOWN = {event["destination"] for event in NORMAL if "destination" in event}
+
+
+class StubInvestigator:
+    def investigate(self, evidence: object) -> dict[str, str]:
+        return {
+            "summary": "Investigated locally.",
+            "reason": "Review and block the correlated destination.",
+        }
 
 
 def test_normal_window_stays_below_threshold() -> None:
@@ -36,10 +43,7 @@ def test_recommendation_is_constrained_in_code() -> None:
     result = detect_window(SUSPICIOUS, known_destinations=KNOWN)
     finding, recommendation = recommend_policy(
         result,
-        MockInvestigator(
-            summary="Investigated locally.",
-            reason="Review and block the correlated destination.",
-        ),
+        StubInvestigator(),
         now=datetime(2026, 7, 26, tzinfo=timezone.utc),
     )
     assert finding["summary"] == "Investigated locally."

@@ -19,8 +19,22 @@ services:
       dockerfile: infra/gb10/Dockerfile.ingestion
       args:
         GIT_SHA: ${GIT_SHA:-unknown}
+    env_file:
+      - "${OPENCLAW_RUNTIME_ENV_FILE:-/home/dell/.openclaw/runtime.env}"
+    environment:
+      INGESTION_DB_PATH: /data/exfilguard.db
+      LITELLM_BASE_URL: http://host.docker.internal:4000
+      LITELLM_MODEL: ${LITELLM_MODEL:-Qwen3.6-27B-FP8}
+      OPENCLAW_GATEWAY_URL: http://host.docker.internal:18789
+      MGMT_BIND_ADDR: ${MGMT_BIND_ADDR:-127.0.0.1}
+      NVIDIA_DRIVER_CAPABILITIES: utility
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    gpus: all
     ports:
-      - "${MGMT_BIND_ADDR:-127.0.0.1}:${INGESTION_PORT:-8100}:8100"
+      - "127.0.0.1:${INGESTION_PORT:-8100}:8100"
+    volumes:
+      - ingestion-data:/data
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8100/health',timeout=2).status==200 else 1)"]
       interval: 5s
@@ -35,6 +49,11 @@ services:
       dockerfile: infra/gb10/Dockerfile.processing
       args:
         GIT_SHA: ${GIT_SHA:-unknown}
+    depends_on:
+      ingestion:
+        condition: service_healthy
+    environment:
+      INGESTION_URL: http://ingestion:8100
     ports:
       - "${PRIVATE_BIND_ADDR:-127.0.0.1}:${PROCESSING_LIVE_PORT:-8200}:8200"
     healthcheck:
@@ -56,6 +75,9 @@ services:
       # .env.example's 127.0.0.1 default (which would resolve to this
       # container's own loopback instead of the ingestion container).
       DASHBOARD_API_TARGET: http://ingestion:8100
+    depends_on:
+      ingestion:
+        condition: service_healthy
     ports:
       - "${MGMT_BIND_ADDR:-127.0.0.1}:${DASHBOARD_PORT:-8300}:8300"
     healthcheck:
@@ -64,3 +86,6 @@ services:
       timeout: 3s
       retries: 30
       start_period: 15s
+
+volumes:
+  ingestion-data:

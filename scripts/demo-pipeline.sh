@@ -48,6 +48,7 @@ curl -fsS "$api_url/health" >/dev/null
 
 python3 "$repo_root/scripts/generate_dummy_events.py" \
   --output-dir "$tmp/generated" \
+  --event-count 22 \
   --post-to "$api_url/v1/events"
 
 uv run --project "$repo_root/services/processing" squidward-process detect \
@@ -70,14 +71,14 @@ with urlopen(f"{api_url}/v1/findings") as response:
     findings = json.load(response)
 with urlopen(f"{api_url}/v1/recommendations") as response:
     recommendations = json.load(response)
-assert events["count"] == 26
+assert events["count"] == 22
 assert findings["count"] == 1
-assert recommendations["count"] == 1
-assert detection["finding"]["severity"] == "critical"
+assert recommendations["count"] == 0
+assert detection["finding"]["severity"] in {"high", "critical"}
 print(
     "Demo pipeline ready: "
     f"{events['count']} events -> risk {detection['risk_score']:.2f} -> "
-    f"{recommendations['recommendations'][0]['action_type']}"
+    "finding persisted; OpenClaw investigation pending"
 )
 PY
 

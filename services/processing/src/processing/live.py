@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-import time
 from collections import deque
+from threading import Event
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -61,7 +61,13 @@ class LiveScorer:
                 self.client.post_finding(detection.finding)
         return len(events)
 
-    def run(self, *, interval: float = 1.0) -> None:
-        while True:
-            self.poll_once()
-            time.sleep(interval)
+    def run(self, *, interval: float = 1.0, stop_event: Event | None = None) -> None:
+        stop_event = stop_event or Event()
+        while not stop_event.is_set():
+            try:
+                self.poll_once()
+            except RuntimeError:
+                # Ingestion can restart independently; the scorer resumes on
+                # the next interval rather than losing its worker thread.
+                pass
+            stop_event.wait(interval)

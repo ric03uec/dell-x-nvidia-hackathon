@@ -5,8 +5,8 @@ Local-only processing for canonical event windows:
 1. deterministic feature extraction and explainable rules;
 2. a CPU Isolation Forest that can fail independently;
 3. an optional offline PyTorch autoencoder trained from snapshot-derived features;
-4. local LiteLLM investigation with a deterministic mock and no cloud fallback;
-5. schema-shaped findings and code-constrained `deny_destination` recommendations.
+4. schema-shaped findings persisted for OpenClaw investigation;
+5. no cloud or mock-inference runtime fallback.
 
 ## Demo
 
@@ -24,26 +24,19 @@ positive rates to `artifacts/training-report.json`. Both directories are ignored
 because generated data and binary model artifacts are reproducible and should
 not be merged or hand-edited.
 
-Use local inference through the repository SSH tunnel:
+Post deterministic findings to a running ingestion service:
 
 ```bash
-ssh -fN -o ExitOnForwardFailure=yes \
-  -L 14000:127.0.0.1:4000 dell@172.16.10.127
-export LOCAL_INFERENCE_API_KEY="$(
-  ssh dell@172.16.10.127 \
-    'docker exec hack-litellm printenv LITELLM_MASTER_KEY'
-)"
 uv run --project services/processing squidward-process detect \
   --events fixtures/expected/suspicious.json \
   --baseline fixtures/expected/normal.json \
   --model services/processing/artifacts/isolation-forest.pkl \
-  --local-inference
+  --post-to http://127.0.0.1:8100
 ```
 
-Add `--post-to http://localhost:8100` to post the finding and constrained
-recommendation to a running ingestion API. Live detection remains rules-only if
-the Isolation Forest artifact is absent or corrupt, and recommendation text
-falls back to deterministic evidence if local inference is unavailable.
+The OpenClaw security agent reads persisted evidence over FastMCP and creates
+the investigation and constrained recommendation. Live detection remains
+rules-only if the Isolation Forest artifact is absent or corrupt.
 
 For the hackathon, the bundle trainer uses generated windows derived from the
 frozen Squid/OpenShell fixtures, including mitmproxy-style sensitive field-name

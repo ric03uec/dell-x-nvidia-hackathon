@@ -10,9 +10,8 @@ from processing.anomaly import IsolationForestModel, safe_load
 from processing.autoencoder import AutoencoderConfig, AutoencoderModel
 from processing.client import IngestionClient
 from processing.dataset import augmented_normal_windows, load_events
-from processing.inference import LocalLiteLLMInvestigator, MockInvestigator
 from processing.live import LiveScorer
-from processing.pipeline import detect_window, recommend_policy
+from processing.pipeline import detect_window
 from processing.synthetic import generate_dataset
 from processing.training import train_bundle
 
@@ -57,16 +56,9 @@ def _detect(args: argparse.Namespace) -> None:
         "finding": detection.finding,
     }
     if detection.finding is not None:
-        investigator = (
-            LocalLiteLLMInvestigator.from_env() if args.local_inference else MockInvestigator()
-        )
-        finding, recommendation = recommend_policy(detection, investigator)
-        output["finding"] = finding
-        output["recommendation"] = recommendation
         if args.post_to:
             client = IngestionClient(args.post_to)
-            client.post_finding(finding)
-            client.post_recommendation(recommendation)
+            client.post_finding(detection.finding)
     print(json.dumps(output, indent=2, sort_keys=True))
 
 
@@ -151,7 +143,6 @@ def _parser() -> argparse.ArgumentParser:
     detect.add_argument("--baseline", type=Path)
     detect.add_argument("--model", type=Path)
     detect.add_argument("--threshold", type=float, default=70.0)
-    detect.add_argument("--local-inference", action="store_true")
     detect.add_argument("--post-to", help="Ingestion base URL, e.g. http://localhost:8100")
     detect.set_defaults(handler=_detect)
 

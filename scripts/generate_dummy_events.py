@@ -255,11 +255,20 @@ def main() -> None:
         default=10.0,
         help="Per-request timeout in seconds (default: 10).",
     )
+    parser.add_argument(
+        "--event-count",
+        type=int,
+        help="Use only the first N generated input events.",
+    )
     args = parser.parse_args()
     if args.timeout <= 0:
         parser.error("--timeout must be greater than zero")
 
     events = generate_events()
+    if args.event_count is not None:
+        if not 1 <= args.event_count <= len(events):
+            parser.error(f"--event-count must be between 1 and {len(events)}")
+        events = events[: args.event_count]
     if args.output_dir is not None:
         args.output_dir.mkdir(parents=True, exist_ok=True)
         _write_jsonl(args.output_dir / "events.jsonl", events)
