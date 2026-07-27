@@ -5,6 +5,10 @@ const notesPanel = document.querySelector('#notes-panel');
 const notesCopy = document.querySelector('#notes-copy');
 let current = 0;
 
+if (new URLSearchParams(location.search).has('export')) {
+  document.body.classList.add('export-mode');
+}
+
 function show(index) {
   current = Math.max(0, Math.min(index, slides.length - 1));
   slides.forEach((slide, i) => slide.classList.toggle('active', i === current));

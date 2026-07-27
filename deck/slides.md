@@ -1,10 +1,10 @@
 # SquidWard
 
-## Enterprise IT firewall at AI speed. Human control intact.
+## Enforce agentic traffic at AI speed.
 
 **Dell x NVIDIA Hackathon 2026**
 
-> AI agents connect to dynamic endpoints faster than static firewall rules can keep up. SquidWard detects behavioral risk locally and turns it into analyst-approved OpenShell policy.
+> AI agents connect to dynamic endpoints faster than static firewall rules can keep up. SquidWard detects behavioral risk locally and turns it into analyst-approved agent policy.
 
 **Speaker notes (0:00-0:30)**
 Traditional IT firewalls were built for humans and predictable traffic. AI agents act continuously, discover tools, and connect to dynamic endpoints. Policy maintained at human speed becomes stale before the next action. SquidWard closes that speed gap without removing human control.
@@ -43,26 +43,6 @@ The firewall is not obsolete; its operating model is. Security teams cannot manu
 
 ---
 
-# SquidWard turns agent behavior into enforceable policy on one GB10.
-
-```text
-OBSERVE              DETECT               INVESTIGATE
-OpenShell + Squid -> Rules + models ----> OpenClaw security agent
-                                                |
-                                                v
-ENFORCE <----------- APPROVE <----------- RECOMMEND
-OpenShell policy     Human analyst         Constrained action
-```
-
-## The outcome
-
-AI-speed detection and policy recommendation; human-approved enforcement before the next attempt.
-
-**Speaker notes (1:10-1:55)**
-SquidWard is the adaptive policy layer between autonomous agents and the firewall. It observes actions, detects anomalies, investigates locally, and proposes a constrained policy update at machine speed. The analyst retains final authority, and OpenShell enforces the approved change where the agent acts.
-
----
-
 # Pre-AI IT Systems
 
 ```text
@@ -76,7 +56,7 @@ Before AI agents, enterprise traffic was comparatively predictable. Internal use
 
 ---
 
-# Traffic flows normally. SquidWard keeps the firewall current.
+# Post-AI: SquidWard keeps the firewall current.
 
 ```text
                   LIVE TRAFFIC
@@ -106,7 +86,27 @@ The top line is the network path enterprises already have: internal users, lapto
 
 ---
 
-# Two detection speeds catch both obvious spikes and slow cross-action attacks.
+# SquidWard turns agent behavior into enforceable policy on one GB10.
+
+```text
+OBSERVE              DETECT               INVESTIGATE
+OpenShell + Squid -> Rules + models ----> OpenClaw security agent
+                                                |
+                                                v
+ENFORCE <----------- APPROVE <----------- RECOMMEND
+Agent policy         Human analyst         Constrained action
+```
+
+## The outcome
+
+AI-speed detection and policy recommendation; human-approved enforcement before the next attempt.
+
+**Speaker notes (1:10-1:55)**
+SquidWard is the adaptive policy layer between autonomous agents and the firewall. It observes actions, detects anomalies, investigates locally, and proposes a constrained policy update at machine speed. The analyst retains final authority, and the agent enforces the approved change.
+
+---
+
+# Fast and slow detection catch different threats.
 
 | LIVE: seconds | OFFLINE: deep history |
 |---|---|
@@ -124,7 +124,7 @@ Fast and deep analysis have different jobs. The live path catches an immediate a
 
 ---
 
-# The model recommends; a human authorizes; OpenShell enforces.
+# The model recommends; a human authorizes; the agent enforces.
 
 ```text
 Finding
@@ -134,7 +134,7 @@ Finding
        expires_at: "..." }
   -> Analyst: APPROVE / REJECT
   -> Allowlisted policy adapter
-  -> OpenShell enforcement
+  -> Agent enforcement
 ```
 
 ## Generative output never becomes an executable command.
@@ -145,25 +145,7 @@ Finding
 - Every decision and enforcement result is audited
 
 **Speaker notes (3:25-4:05)**
-Autonomous defense cannot mean autonomous privilege escalation. The model can only recommend an allowlisted policy action. A human must approve it. The adapter validates it again before OpenShell applies it, and the outcome comes back as an audit event.
-
----
-
-# One demo proves privacy, control, and prevention with four observable outcomes.
-
-| Proof point | What judges can observe |
-|---|---|
-| **0 cloud LLM calls** | NemoClaw routes inference to the local GB10 model |
-| **1 analyst decision** | The policy cannot apply before explicit approval |
-| **2nd attempt blocked** | OpenShell prevents the repeated transfer |
-| **100% local audit trail** | Detection, reasoning, approval, and enforcement remain visible locally |
-
-## Business value
-
-SquidWard gives enterprise security teams an adaptive firewall control plane for autonomous agents: machine-speed policy recommendations, enforceable guardrails, and private local operation.
-
-**Speaker notes (4:05-4:35)**
-The business value is a firewall operating model that can keep pace with agents. One appliance detects changing behavior, gives the analyst a ready-to-enforce policy decision, and prevents the repeat attempt without exporting customer data.
+Autonomous defense cannot mean autonomous privilege escalation. The model can only recommend an allowlisted policy action. A human must approve it. The adapter validates it again before the agent applies it, and the outcome comes back as an audit event.
 
 ---
 

@@ -15,10 +15,10 @@
         <div class="loop-mark" aria-hidden="true"><i></i><i></i><b>SQUID</b></div>
         <div>
           <h1>Squid<span>Ward</span></h1>
-          <p class="tagline">Enterprise IT firewall at AI speed.<br>Human control intact.</p>
+          <p class="tagline">Enforce agentic traffic<br>at AI speed.</p>
         </div>
       </div>
-      <p class="lede">AI agents connect to dynamic endpoints faster than static firewall rules can keep up. SquidWard detects behavioral risk locally and turns it into analyst-approved OpenShell policy.</p>
+      <p class="lede">AI agents connect to dynamic endpoints faster than static firewall rules can keep up. SquidWard detects behavioral risk locally and turns it into analyst-approved agent policy.</p>
       <div class="footer-label">TEAM V-X / ENTERPRISE AGENT SECURITY / 01</div>
       <aside class="notes">Traditional IT firewalls were built for humans and predictable traffic. AI agents act continuously, discover tools, and connect to dynamic endpoints. Policy maintained at human speed becomes stale before the next action. SquidWard closes that speed gap without removing human control.</aside>
     </section>
@@ -58,28 +58,8 @@
       <aside class="notes">The firewall is not obsolete; its operating model is. Security teams cannot manually anticipate every destination an agent may discover or update rules between machine-speed actions. SquidWard continuously observes behavior, detects risk, and prepares the policy response at AI speed.</aside>
     </section>
 
-    <section class="slide" data-title="The closed loop">
-      <div class="eyebrow">THE CLOSED LOOP / 04</div>
-      <h2>SquidWard turns agent behavior into enforceable policy on one GB10.</h2>
-      <div class="loop-flow" aria-label="Observe, detect, investigate, recommend, approve, enforce">
-        <div class="flow-node"><b>01</b><strong>Observe</strong><small>OpenShell + Squid</small></div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node"><b>02</b><strong>Detect</strong><small>Rules + models</small></div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node accent"><b>03</b><strong>Investigate</strong><small>Local security agent</small></div>
-        <div class="flow-arrow down">↓</div>
-        <div class="flow-node"><b>06</b><strong>Enforce</strong><small>OpenShell policy</small></div>
-        <div class="flow-arrow reverse">←</div>
-        <div class="flow-node human"><b>05</b><strong>Approve</strong><small>Human analyst</small></div>
-        <div class="flow-arrow reverse">←</div>
-        <div class="flow-node"><b>04</b><strong>Recommend</strong><small>Constrained action</small></div>
-      </div>
-      <p class="outcome"><span>Outcome</span> AI-speed detection and policy recommendation; human-approved enforcement before the next attempt.</p>
-      <aside class="notes">SquidWard is the adaptive policy layer between autonomous agents and the firewall. It observes actions, detects anomalies, investigates locally, and proposes a constrained policy update at machine speed. The analyst retains final authority, and OpenShell enforces the approved change where the agent acts.</aside>
-    </section>
-
     <section class="slide architecture pre-ai" data-title="Pre-AI IT Systems">
-      <div class="eyebrow">PRE-AI IT SYSTEMS / 05</div>
+      <div class="eyebrow">PRE-AI IT SYSTEMS / 04</div>
       <h2>Pre-AI IT Systems</h2>
       <div class="traffic-strip">
         <span class="diagram-label">LIVE TRAFFIC</span>
@@ -92,9 +72,9 @@
       <aside class="notes">Before AI agents, enterprise traffic was comparatively predictable. Internal users and applications reached known internet destinations through firewalls maintained with static rules and human-speed updates.</aside>
     </section>
 
-    <section class="slide architecture" data-title="Local architecture">
-      <div class="eyebrow">LOCAL-FIRST ARCHITECTURE / 06</div>
-      <h2>Traffic flows normally. SquidWard keeps the firewall current.</h2>
+    <section class="slide architecture" data-title="Post-AI IT Systems">
+      <div class="eyebrow">POST-AI IT SYSTEMS / 05</div>
+      <h2>Post-AI: SquidWard keeps the firewall current.</h2>
       <div class="current-architecture">
         <div class="traffic-strip">
           <span class="diagram-label">LIVE TRAFFIC</span>
@@ -132,9 +112,14 @@
       <aside class="notes">The top line is the network path enterprises already have: internal users, laptops, and agents send traffic through a firewall to the internet. Squid Proxy is our current firewall, with room for other adapters. Below it, SquidWard keeps policy current. IT operators work through the SquidWard agent, the agent uses the API and local GB10 model, and scheduled scans bring in public CVE intelligence. The local model and rules database both remain inside the secure boundary. The firewall reads the resulting rules without changing the traffic path.</aside>
     </section>
 
-    <section class="slide" data-title="Dual-speed detection">
+    <section class="slide end-slide" data-title="Demo">
+      <div class="eyebrow">DEMO / 06</div>
+      <h2>Demo</h2>
+    </section>
+
+    <section class="slide" data-title="Fast and slow detection">
       <div class="eyebrow">ALWAYS-ON DETECTION / 07</div>
-      <h2>Two detection speeds catch both obvious spikes and slow cross-action attacks.</h2>
+      <h2>Fast and slow detection catch different threats.</h2>
       <div class="detectors">
         <article>
           <div class="speed"><strong>&lt;1s</strong><span>LIVE PATH</span></div>
@@ -155,7 +140,7 @@
 
     <section class="slide" data-title="Safe enforcement">
       <div class="eyebrow">SAFE AUTONOMY / 08</div>
-      <h2>The model recommends; a human authorizes; OpenShell enforces.</h2>
+      <h2>The model recommends; a human authorizes; the agent enforces.</h2>
       <div class="policy-stage">
         <pre><span>policy_recommendation</span> {
   action_type: <b>"deny_destination"</b>,
@@ -168,27 +153,14 @@
           <strong>HUMAN GATE</strong>
           <div><button>REJECT</button><button class="approve">APPROVE</button></div>
         </div>
-        <div class="shield"><span>✓</span><strong>ENFORCED</strong><small>OpenShell policy</small></div>
+        <div class="shield"><span>✓</span><strong>ENFORCED</strong><small>Agent policy</small></div>
       </div>
       <div class="guardrails"><span>No shell commands</span><span>No direct enforcement</span><span>Schema validated</span><span>Fully audited</span></div>
-      <aside class="notes">Autonomous defense cannot mean autonomous privilege escalation. The model only recommends an allowlisted action. A human approves it. The adapter validates it again before OpenShell applies it, and the result becomes an audit event.</aside>
-    </section>
-
-    <section class="slide" data-title="Measurable value">
-      <div class="eyebrow">MEASURABLE VALUE / 09</div>
-      <h2>One workflow proves privacy, control, and prevention with four observable outcomes.</h2>
-      <div class="metrics">
-        <article><strong>0</strong><span>cloud LLM calls</span><small>Inference stays on GB10</small></article>
-        <article><strong>1</strong><span>analyst decision</span><small>Policy requires approval</small></article>
-        <article><strong>2<sup>nd</sup></strong><span>attempt blocked</span><small>Prevention, not alerting</small></article>
-        <article><strong>100%</strong><span>local audit trail</span><small>Evidence stays private</small></article>
-      </div>
-      <div class="value-line"><span>For enterprise security teams</span> An adaptive firewall control plane for autonomous agents: machine-speed policy recommendations, enforceable guardrails, and private local operation.</div>
-      <aside class="notes">The business value is a firewall operating model that can keep pace with agents. One appliance detects changing behavior, gives the analyst a ready-to-enforce policy decision, and prevents the repeat attempt without exporting customer data.</aside>
+      <aside class="notes">Autonomous defense cannot mean autonomous privilege escalation. The model only recommends an allowlisted action. A human approves it. The adapter validates it again before the agent applies it, and the result becomes an audit event.</aside>
     </section>
 
     <section class="slide demo-slide" data-title="Live demo">
-      <div class="eyebrow">LIVE DEMO / 10</div>
+      <div class="eyebrow">LIVE DEMO / 09</div>
       <h2>Now watch the same transfer go from allowed to blocked.</h2>
       <ol class="demo-steps">
         <li><b>01</b><span><strong>Normal activity</strong>Business agent works inside OpenShell.</span></li>
@@ -202,7 +174,7 @@
     </section>
 
     <section class="slide end-slide" data-title="Close">
-      <div class="eyebrow"><span class="pulse"></span> SQUIDWARD / 11</div>
+      <div class="eyebrow"><span class="pulse"></span> SQUIDWARD / 10</div>
       <h2>Agentic traffic needs a firewall<br>that can keep up.</h2>
       <p class="closing">Observe continuously. <span>Adapt at AI speed.</span> Enforce with control.</p>
       <div class="rubric">
@@ -215,7 +187,7 @@
   <nav class="controls" aria-label="Presentation controls">
     <button id="prev" aria-label="Previous slide">←</button>
     <div class="progress"><i id="progress"></i></div>
-    <span id="counter">01 / 11</span>
+    <span id="counter">01 / 10</span>
     <button id="notes" aria-label="Toggle speaker notes">N</button>
     <button id="fullscreen" aria-label="Toggle fullscreen">⛶</button>
     <button id="next" aria-label="Next slide">→</button>
