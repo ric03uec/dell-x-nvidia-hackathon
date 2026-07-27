@@ -2,8 +2,8 @@
 """Generate deterministic, privacy-safe demo events.
 
 The sequence is inspired by a mitmproxy capture, but contains only synthetic
-values. It includes ordinary HTTP activity, a suspicious read/stage/upload
-sequence, analyst approval, and a blocked repeat transfer.
+values. It includes varied ordinary HTTP activity followed by a suspicious
+read/stage/upload sequence. Expected policy outcomes are kept separately.
 """
 
 from __future__ import annotations
@@ -19,6 +19,20 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 METHODS = ("GET", "PUT", "PATCH", "DELETE", "POST")
+APPROVED_DESTINATIONS = (
+    "approved-api.demo.local",
+    "artifacts.demo.local",
+    "packages.demo.local",
+    "telemetry.demo.local",
+    "wiki.demo.local",
+)
+IDENTITIES = (
+    ("business-agent", "demo-analyst", "gb10-demo"),
+    ("build-agent", "ci-runner", "build-node-01"),
+    ("finance-agent", "finance-ops", "finance-node-02"),
+    ("support-agent", "support-ops", "support-node-03"),
+    ("research-agent", "research-ops", "research-node-04"),
+)
 BASE_TIME = datetime(2026, 7, 26, 14, 0, tzinfo=timezone.utc)
 
 
@@ -34,40 +48,50 @@ def _event(
     destination: str,
     request_bytes: int = 0,
     attributes: dict[str, Any] | None = None,
+    actor: str = "business-agent",
+    user: str = "demo-analyst",
+    device: str = "gb10-demo",
 ) -> dict[str, Any]:
     return {
         "schema_version": "1.0",
         "event_id": f"evt-{index:03d}",
         "timestamp": _timestamp(index),
         "source_type": source_type,
-        "actor": "business-agent",
-        "user": "demo-analyst",
-        "device": "gb10-demo",
+        "actor": actor,
+        "user": user,
+        "device": device,
         "action": action,
         "destination": destination,
         "request_bytes": request_bytes,
         "attributes": {
             "flow_id": f"flow-{index:03d}",
             "openshell_run_id": "run-synthetic-001",
-            "openclaw_agent_id": "agent-synthetic-001",
+            "openclaw_agent_id": actor,
             **(attributes or {}),
         },
     }
 
 
 def generate_events() -> list[dict[str, Any]]:
-    """Return a deterministic 26-event demo sequence."""
+    """Return 100 input events followed by four expected outcome events."""
     events: list[dict[str, Any]] = []
 
-    # Three ordinary request cycles to an approved destination.
-    for index, method in enumerate(METHODS * 3, start=1):
+    # Ninety-three varied requests to approved internal destinations.
+    for index in range(1, 94):
+        method = METHODS[(index - 1) % len(METHODS)]
+        actor, user, device = IDENTITIES[(index - 1) % len(IDENTITIES)]
+        destination_index = ((index - 1) // len(METHODS)) % len(APPROVED_DESTINATIONS)
+        destination = APPROVED_DESTINATIONS[destination_index]
         events.append(
             _event(
                 index,
                 source_type="mitmproxy",
                 action=f"http_{method.lower()}",
-                destination="approved-api.demo.local",
-                request_bytes=0 if method == "GET" else 128 + index,
+                destination=destination,
+                request_bytes=0 if method == "GET" else 128 + (index * 137) % 250_000,
+                actor=actor,
+                user=user,
+                device=device,
                 attributes={
                     "method": method,
                     "path_template": "/anything/{item_id}",
@@ -77,7 +101,7 @@ def generate_events() -> list[dict[str, Any]]:
                     "response_status": 200,
                     "response_bytes": 512,
                     "json_field_names": ["index", "random", "run"] if method != "GET" else [],
-                    "duration_ms": 20 + index,
+                    "duration_ms": 20 + index % 45,
                 },
             )
         )
@@ -85,25 +109,25 @@ def generate_events() -> list[dict[str, Any]]:
     # Cross-source activity provides the context that makes the upload suspicious.
     events.append(
         _event(
-            16,
+            94,
             source_type="openshell",
             action="file_read",
             destination="local-sensitive-data",
-            attributes={"resource_class": "customer-records", "openshell_action_id": "action-016"},
+            attributes={"resource_class": "customer-records", "openshell_action_id": "action-094"},
         )
     )
     events.append(
         _event(
-            17,
+            95,
             source_type="openshell",
             action="archive_create",
             destination="local-staging",
             request_bytes=25_000_000,
-            attributes={"resource_class": "staged-archive", "openshell_action_id": "action-017"},
+            attributes={"resource_class": "staged-archive", "openshell_action_id": "action-095"},
         )
     )
 
-    for index, method in enumerate(METHODS, start=18):
+    for index, method in enumerate(METHODS, start=96):
         is_upload = method == "POST"
         events.append(
             _event(
@@ -133,7 +157,7 @@ def generate_events() -> list[dict[str, Any]]:
 
     events.append(
         _event(
-            23,
+            101,
             source_type="security-agent",
             action="policy_recommended",
             destination="new-receiver.demo.local",
@@ -145,7 +169,7 @@ def generate_events() -> list[dict[str, Any]]:
     )
     events.append(
         _event(
-            24,
+            102,
             source_type="dashboard",
             action="policy_approved",
             destination="new-receiver.demo.local",
@@ -154,7 +178,7 @@ def generate_events() -> list[dict[str, Any]]:
     )
     events.append(
         _event(
-            25,
+            103,
             source_type="mitmproxy",
             action="http_post",
             destination="new-receiver.demo.local",
@@ -172,12 +196,12 @@ def generate_events() -> list[dict[str, Any]]:
     )
     events.append(
         _event(
-            26,
+            104,
             source_type="openshell",
             action="network_denied",
             destination="new-receiver.demo.local",
             attributes={
-                "openshell_action_id": "action-026",
+                "openshell_action_id": "action-104",
                 "recommendation_id": "rec-synthetic-001",
                 "enforcement_point": "network_policy",
             },
@@ -190,11 +214,11 @@ def expected_outcomes() -> dict[str, Any]:
     """Return fixture truth separately so labels do not leak into input events."""
     return {
         "schema_version": "1.0",
-        "normal_event_ids": [f"evt-{index:03d}" for index in range(1, 16)],
-        "suspicious_event_ids": [f"evt-{index:03d}" for index in range(16, 23)],
-        "recommendation_event_id": "evt-023",
-        "approval_event_id": "evt-024",
-        "blocked_event_ids": ["evt-025", "evt-026"],
+        "normal_event_ids": [f"evt-{index:03d}" for index in range(1, 94)],
+        "suspicious_event_ids": [f"evt-{index:03d}" for index in range(94, 101)],
+        "recommendation_event_id": "evt-101",
+        "approval_event_id": "evt-102",
+        "blocked_event_ids": ["evt-103", "evt-104"],
         "expected_action_type": "deny_destination",
         "expected_destination": "new-receiver.demo.local",
     }

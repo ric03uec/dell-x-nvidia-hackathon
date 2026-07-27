@@ -57,11 +57,26 @@ curl -fsS "$api_url/health" >/dev/null
 
 python3 "$repo_root/scripts/generate_dummy_events.py" \
   --output-dir "$tmp/generated" \
-  --event-count 22 \
+  --event-count 100 \
   --post-to "$api_url/v1/events"
 
+python3 - "$tmp/generated/events.jsonl" "$tmp/generated/expected.json" "$tmp/detection-events.jsonl" <<'PY'
+import json
+import sys
+
+events_path, expected_path, output_path = sys.argv[1:]
+expected = json.load(open(expected_path))
+suspicious_ids = set(expected["suspicious_event_ids"])
+with open(events_path) as source, open(output_path, "w") as output:
+    for line in source:
+        event = json.loads(line)
+        if event["event_id"] in suspicious_ids:
+            output.write(json.dumps(event, sort_keys=True) + "\n")
+PY
+
 uv run --project "$repo_root/services/processing" squidward-process detect \
-  --events "$tmp/generated/events.jsonl" \
+  --events "$tmp/detection-events.jsonl" \
+  --assessment-events "$tmp/generated/events.jsonl" \
   --baseline "$repo_root/fixtures/expected/normal.json" \
   --model "$model" \
   --post-to "$api_url" \
@@ -80,7 +95,7 @@ with urlopen(f"{api_url}/v1/findings") as response:
     findings = json.load(response)
 with urlopen(f"{api_url}/v1/recommendations") as response:
     recommendations = json.load(response)
-assert events["count"] == 22
+assert events["count"] == 100
 assert findings["count"] == 1
 assert recommendations["count"] == 0
 assert detection["finding"]["severity"] in {"high", "critical"}
@@ -100,7 +115,9 @@ printf 'Ingestion: %s\n' "$api_url"
 printf 'SQLite:   %s\n' "$database"
 cd "$repo_root/services/dashboard"
 if command -v pnpm >/dev/null 2>&1; then
-  pnpm run dev -- --host 127.0.0.1 --port "$dashboard_port"
+  VITE_ENABLE_DEMO_PAGES="${VITE_ENABLE_DEMO_PAGES:-true}" \
+    pnpm run dev -- --host 127.0.0.1 --port "$dashboard_port"
 else
-  npx -y pnpm@11.17.0 run dev -- --host 127.0.0.1 --port "$dashboard_port"
+  VITE_ENABLE_DEMO_PAGES="${VITE_ENABLE_DEMO_PAGES:-true}" \
+    npx -y pnpm@11.17.0 run dev -- --host 127.0.0.1 --port "$dashboard_port"
 fi

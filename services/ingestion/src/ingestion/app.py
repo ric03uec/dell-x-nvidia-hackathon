@@ -59,6 +59,13 @@ class FindingIn(BaseModel):
     model_version: str | None = None
 
 
+class EventAssessmentIn(BaseModel):
+    schema_version: Literal["1.0"]
+    event_id: str
+    risk_score: float = Field(ge=0, le=100)
+    model_version: str
+
+
 class RecommendationIn(BaseModel):
     schema_version: Literal["1.0"]
     recommendation_id: str
@@ -228,14 +235,28 @@ def get_events(
         if after_id not in ids:
             raise HTTPException(400, f"unknown after_id: {after_id}")
         events = events[ids.index(after_id) + 1 :]
+    assessments = store.event_assessments(conn, [str(event["event_id"]) for event in events])
+    for event in events:
+        assessment = assessments.get(str(event["event_id"]))
+        if assessment:
+            event.update(assessment)
     findings = store.list_findings(conn)
     for event in events:
         for finding in findings:
             if event.get("event_id") in finding["event_ids"]:
                 event["finding_id"] = finding["finding_id"]
-                event["risk_score"] = finding["risk_score"]
+                event.setdefault("risk_score", finding["risk_score"])
                 break
     return envelope(count=len(events), events=events)
+
+
+@app.post("/v1/event-assessments", status_code=201)
+def post_event_assessments(
+    assessments: list[EventAssessmentIn] | EventAssessmentIn,
+) -> dict[str, Any]:
+    batch = assessments if isinstance(assessments, list) else [assessments]
+    accepted = store.put_event_assessments(conn, [assessment.model_dump() for assessment in batch])
+    return envelope(accepted=accepted)
 
 
 @app.delete("/v1/demo-data")

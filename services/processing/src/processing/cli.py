@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import deque
 from pathlib import Path
 
 from processing.anomaly import IsolationForestModel, safe_load
 from processing.autoencoder import AutoencoderConfig, AutoencoderModel
 from processing.client import IngestionClient
 from processing.dataset import augmented_normal_windows, load_events
+from processing.demo_live import run_demo
 from processing.live import LiveScorer
 from processing.pipeline import detect_window
 from processing.synthetic import generate_dataset
@@ -43,9 +45,10 @@ def _detect(args: argparse.Namespace) -> None:
     events = load_events(args.events)
     baseline = load_events(args.baseline) if args.baseline else []
     model = safe_load(args.model)
+    known_destinations = _known_destinations(baseline)
     detection = detect_window(
         events,
-        known_destinations=_known_destinations(baseline),
+        known_destinations=known_destinations,
         anomaly_model=model,
         threshold=args.threshold,
     )
@@ -55,9 +58,32 @@ def _detect(args: argparse.Namespace) -> None:
         "features": detection.features.as_dict(),
         "finding": detection.finding,
     }
+    client = IngestionClient(args.post_to) if args.post_to else None
+    if args.assessment_events:
+        assessment_events = load_events(args.assessment_events)
+        window: deque[dict[str, object]] = deque(maxlen=20)
+        assessments = []
+        for event in assessment_events:
+            window.append(event)
+            result = detect_window(
+                window,
+                known_destinations=known_destinations,
+                anomaly_model=model,
+                threshold=args.threshold,
+            )
+            assessments.append(
+                {
+                    "schema_version": "1.0",
+                    "event_id": event["event_id"],
+                    "risk_score": round(result.risk_score, 2),
+                    "model_version": model.version if model else "rules-001",
+                }
+            )
+        output["assessments"] = assessments
+        if client:
+            client.post_event_assessments(assessments)
     if detection.finding is not None:
-        if args.post_to:
-            client = IngestionClient(args.post_to)
+        if client:
             client.post_finding(detection.finding)
     print(json.dumps(output, indent=2, sort_keys=True))
 
@@ -95,6 +121,18 @@ def _live(args: argparse.Namespace) -> None:
         threshold=args.threshold,
     )
     scorer.run(interval=args.interval)
+
+
+def _demo_live(args: argparse.Namespace) -> None:
+    run_demo(
+        args.ingestion_url,
+        interval=args.interval,
+        cycle_pause=args.cycle_pause,
+        normal_per_cycle=args.normal_per_cycle,
+        suspicious_every=args.suspicious_every,
+        cycles=args.cycles,
+        seed=args.seed,
+    )
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -140,6 +178,7 @@ def _parser() -> argparse.ArgumentParser:
 
     detect = commands.add_parser("detect", help="Score one JSON/JSONL event window.")
     detect.add_argument("--events", type=Path, required=True)
+    detect.add_argument("--assessment-events", type=Path)
     detect.add_argument("--baseline", type=Path)
     detect.add_argument("--model", type=Path)
     detect.add_argument("--threshold", type=float, default=70.0)
@@ -154,6 +193,18 @@ def _parser() -> argparse.ArgumentParser:
     live.add_argument("--threshold", type=float, default=70.0)
     live.add_argument("--interval", type=float, default=1.0)
     live.set_defaults(handler=_live)
+
+    demo_live = commands.add_parser(
+        "demo-live", help="Continuously emit synthetic events and active findings."
+    )
+    demo_live.add_argument("--ingestion-url", default="http://127.0.0.1:8100")
+    demo_live.add_argument("--interval", type=float, default=1.0)
+    demo_live.add_argument("--cycle-pause", type=float, default=3.0)
+    demo_live.add_argument("--normal-per-cycle", type=int, default=5)
+    demo_live.add_argument("--suspicious-every", type=int, default=3)
+    demo_live.add_argument("--cycles", type=int)
+    demo_live.add_argument("--seed", type=int, default=42)
+    demo_live.set_defaults(handler=_demo_live)
     return parser
 
 

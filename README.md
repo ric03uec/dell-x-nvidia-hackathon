@@ -20,12 +20,17 @@ just dashboard-demo        # run the real local ingestion pipeline and dashboard
 just demo-pipeline         # generate → ingest → detect → recommend → dashboard
 ```
 
-`just demo-pipeline` starts the durable SQLite ingestion API, posts 22
+`just demo-pipeline` starts the durable SQLite ingestion API, posts 100
 deterministic input events, runs them through deterministic rules and the promoted
-Isolation Forest, stores the resulting finding and constrained recommendation,
-and launches the dashboard at `http://127.0.0.1:8300`. Data remains available
+Isolation Forest, persists rolling risk assessments for every event, stores the
+resulting finding for OpenClaw investigation, and launches the dashboard at
+`http://127.0.0.1:8300`. Data remains available
 in `data/demo-pipeline.db` after the demo stops. Set `DEMO_PIPELINE_RESET=0` to
 reuse the existing database instead of resetting it at startup.
+
+Fixture-backed CVE, asset, model, and analyst-feedback pages are enabled by
+default for presentations. Set `VITE_ENABLE_DEMO_PAGES=false` before starting
+the dashboard or app stack to remove those pages from navigation.
 
 To populate the database used by an already-running ingestion API, or remove
 only that synthetic run while preserving real captures:
@@ -34,8 +39,14 @@ only that synthetic run while preserving real captures:
 just s ingestion run              # terminal 1; SQLite is durable
 just demo-seed                     # terminal 2; posts 26 events through the API
 just demo-clear                    # removes demo events/findings/actions only
-just demo-seed http://HOST:8100  # target another running appliance
+just demo-live                     # continuously add traffic and active findings
+just demo-seed http://HOST:8100    # target another running appliance
 ```
+
+`just demo-live` emits mostly normal traffic with a suspicious correlated burst
+every third cycle. Each burst is scored by the real deterministic processing
+pipeline and creates a pending `deny_destination` recommendation. It runs until
+Ctrl-C; pass an ingestion URL as the recipe argument to target another host.
 
 Demo cleanup identifies the synthetic `run-synthetic-001` marker and also
 removes findings, recommendations, decisions, enforcement results, and rules
