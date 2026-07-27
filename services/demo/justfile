@@ -1,0 +1,38 @@
+# services/demo — the recorded demo and the live one.
+# Root verbs: just s demo check | just s demo test | just s demo simulate
+
+set shell := ["bash", "-uc"]
+
+# List available recipes
+default:
+    @just --list
+
+# Sync this member's dependencies
+setup:
+    uv sync --project .
+
+# Lint, format-check and typecheck
+check:
+    uv run --project . ruff check src tests
+    uv run --project . ruff format --check src tests
+    uv run --project . mypy src
+
+# Tests — no proxy, no ingestion, no network
+test:
+    uv run --project . pytest tests -q
+
+# LIVE: point a laptop at the proxy and watch its egress arrive
+live:
+    uv run --project . demo live
+
+# SIMULATE: an enterprise's traffic, planted anomalies, then the agent's MCP loop
+simulate users="40" duration="45":
+    uv run --project . demo simulate --users {{ users }} --duration {{ duration }}
+
+# Just the security agent's investigation, against whatever is already stored
+agent:
+    uv run --project . demo agent
+
+# The DNS aliases the sink container needs in docker-compose.squid.yml
+aliases:
+    @uv run --project . demo aliases
