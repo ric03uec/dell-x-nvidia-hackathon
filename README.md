@@ -1,10 +1,12 @@
-# dell-x-nvidia-hackathon
+# SquidWard
 
 Monorepo scaffold for **NemoClaw** agent projects with shared **OpenShell**
 sandbox policy libraries. Prototype locally, deploy to a **DGX Spark** over
 SSH, inference entirely local to the Spark.
 
 <img width="1719" height="915" alt="squidward-logo" src="https://github.com/user-attachments/assets/e7fb97b8-bca8-428a-afb5-b0b0d158e3f8" />
+
+<sub>Built in **8h 14min** using [BeadHive](https://github.com/beadhive/beadhive) <img src="https://raw.githubusercontent.com/beadhive/beadhive/main/docs/assets/brand/banner-readme.png" alt="BeadHive" height="16"></sub>
 
 ## Quick start
 
