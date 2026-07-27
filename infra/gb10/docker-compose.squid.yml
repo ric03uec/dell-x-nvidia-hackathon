@@ -19,6 +19,31 @@ services:
       - /home/dell/vllm/squid/squid.conf:/etc/squid/squid.conf:ro
       - hack-squid-logs:/var/log/squid
 
+  # Demo only. Stands in for every destination in services/demo's catalog so
+  # `demo simulate` runs at loopback speed and needs no internet. Squid
+  # resolves these names through compose DNS.
+  sink:
+    container_name: hack-demo-sink
+    image: python:3.11-slim
+    restart: unless-stopped
+    volumes:
+      - ./services/demo/src/demo/sink.py:/sink.py:ro
+    command: ["python3", "/sink.py"]
+    networks:
+      default:
+        aliases:
+          - crm.northwind-labs.test
+          - files.northwind-labs.test
+          - docs.confluence-cloud.test
+          - api.billing-sandbox.test
+          - registry.npm-mirror.test
+          - pypi.package-mirror.test
+          - telemetry.metrics-agent.test
+          - mail.smtp-relay.test
+          - auth.okta-sandbox.test
+          - status.uptime-probe.test
+          - backup-sync.dropfiles-cdn.test
+
 volumes:
   # A named volume, not a bind mount: squid writes as uid 13 (proxy) and a host
   # directory would need chowning to match. Read the log through the container:

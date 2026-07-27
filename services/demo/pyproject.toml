@@ -1,0 +1,31 @@
+[project]
+name = "demo"
+version = "0.1.0"
+description = "SquidWard demo driver: live mode for real LAN traffic, simulate mode for an enterprise's worth of synthetic egress plus planted anomalies."
+requires-python = ">=3.11"
+dependencies = [
+    # Faker earns its place here: hand-rolling a corpus of plausible users,
+    # paths and filenames is more code than the dependency, and the demo needs
+    # traffic that reads like an organisation rather than uuid spam.
+    "faker>=30",
+    # The agent loop talks MCP, not HTTP — that is the point of showing it.
+    "fastmcp>=2.11",
+]
+
+[project.scripts]
+demo = "demo.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Lint/type/test config lives at the workspace root (../../pyproject.toml) so
+# every member shares one set of rules — do not redeclare [tool.ruff],
+# [tool.mypy] or [tool.pytest.ini_options] here.
