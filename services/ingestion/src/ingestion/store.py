@@ -15,9 +15,11 @@ import json
 import sqlite3
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+SCHEMA_VERSION = "1.0"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
@@ -185,13 +187,30 @@ def _epoch(value: Any) -> float | None:
         return None
 
 
+def _iso(ts: float) -> str:
+    return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 def _event_payload(row: sqlite3.Row) -> dict[str, Any]:
+    """Return one contract-shaped event whichever shape was posted.
+
+    Squid records arrive as ts/src/req_bytes and contract posts as
+    timestamp/actor/request_bytes; both are stored in the same columns, so
+    consumers are given the contract names either way. Source-specific keys in
+    `raw` are preserved alongside.
+    """
     stored = dict(row)
-    raw = json.loads(stored["raw"])
-    if isinstance(raw, dict) and raw.get("schema_version") and raw.get("event_id"):
-        return raw
-    stored["raw"] = raw
-    return stored
+    raw = json.loads(stored.pop("raw"))
+    payload: dict[str, Any] = dict(raw) if isinstance(raw, dict) else {"raw": raw}
+    payload["schema_version"] = payload.get("schema_version") or SCHEMA_VERSION
+    payload["event_id"] = stored["event_id"]
+    payload["timestamp"] = payload.get("timestamp") or _iso(stored["ts"])
+    payload["source_type"] = payload.get("source_type") or stored["source_type"]
+    payload["actor"] = payload.get("actor") or stored["src"]
+    payload["destination"] = payload.get("destination") or stored["destination"]
+    if payload.get("request_bytes") is None:
+        payload["request_bytes"] = stored["req_bytes"]
+    return payload
 
 
 def list_events(

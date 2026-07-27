@@ -205,7 +205,7 @@ def health() -> dict[str, Any]:
 @app.post("/v1/events", status_code=201)
 def post_events(events: list[EventIn] | EventIn) -> dict[str, Any]:
     batch = events if isinstance(events, list) else [events]
-    records = [event.model_dump(exclude_none=False) for event in batch]
+    records = [event.model_dump(exclude_none=True) for event in batch]
     for record in records:
         version = record.get("schema_version")
         if version not in {None, SCHEMA_VERSION}:

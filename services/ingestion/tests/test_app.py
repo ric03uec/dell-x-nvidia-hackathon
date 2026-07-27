@@ -101,8 +101,19 @@ def test_post_then_get_events(client: TestClient) -> None:
 def test_unknown_fields_are_preserved_not_rejected(client: TestClient) -> None:
     # The exfilguard field set is provisional until dxnvh-332.2 freezes it.
     client.post("/v1/events", json=[{**SQUID_EVENT, "future_field": "keep me"}])
-    raw = client.get("/v1/events").json()["events"][0]["raw"]
-    assert "future_field" in raw
+    event = client.get("/v1/events").json()["events"][0]
+    assert event["future_field"] == "keep me"
+
+
+def test_squid_events_are_returned_in_contract_shape(client: TestClient) -> None:
+    # The dashboard reads timestamp/actor/request_bytes, so a squid record has
+    # to leave ingestion under those names or it renders as "Unavailable".
+    client.post("/v1/events", json=[SQUID_EVENT])
+    event = client.get("/v1/events").json()["events"][0]
+    assert event["timestamp"].endswith("Z")
+    assert event["actor"] == SQUID_EVENT["src"]
+    assert event["request_bytes"] == SQUID_EVENT["req_bytes"]
+    assert event["destination"] == "evil.test:443"
 
 
 def test_canonical_pipeline_is_persisted_and_returned_in_contract_shape(
