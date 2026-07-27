@@ -30,7 +30,7 @@ Post deterministic findings to a running ingestion service:
 uv run --project services/processing squidward-process detect \
   --events fixtures/expected/suspicious.json \
   --baseline fixtures/expected/normal.json \
-  --model services/processing/artifacts/isolation-forest.pkl \
+  --model services/processing/artifacts/registry/isolation-forest-001.pkl \
   --post-to http://127.0.0.1:8100
 ```
 

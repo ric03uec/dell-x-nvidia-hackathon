@@ -8,7 +8,12 @@ generated runtime state is not copied here.
 
 - `settings/openclaw.json` configures the local LiteLLM model and authenticated
   gateway.
-- `workspace/` contains the main agent's checked-in workspace files.
+- `agents.yaml` is the NemoClaw manifest for the agent.
+- `promptlog.md` is the operator-maintained prompt/session log.
+- `policy/` holds OpenShell policy presets for the agent.
+- `workspace/` contains the main agent's checked-in workspace files, including
+  the vulnerability-intelligence subsystem (`config/`, `cron/`, `schemas/`,
+  `tools/`, `tests/`) that collects and scores CVE/URL findings.
 - `skills/` is reserved for reviewed OpenClaw skills.
 
 Do not add API keys, gateway or channel tokens, pairing state, sessions, logs,

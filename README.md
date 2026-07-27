@@ -52,7 +52,7 @@ Demo cleanup identifies the synthetic `run-synthetic-001` marker and also
 removes findings, recommendations, decisions, enforcement results, and rules
 derived exclusively from those events. It does not truncate the database.
 
-On the GB10, the dashboard API reads GPU utilization from `nvidia-smi` and
+On the GB10, the ingestion API reads GPU utilization from `nvidia-smi` and
 unified-memory usage from `/proc/meminfo`. Configure `.env`, then run:
 
 ```bash
@@ -72,9 +72,10 @@ just new my-agent
 ```
 
 Copies `agents/hello-agent/` to `agents/my-agent/`, renames the package, and
-leaves you a self-contained project: its own `pyproject.toml`, `uv.lock`,
+leaves you a self-contained project: its own `pyproject.toml`,
 `agents.yaml` (NemoClaw manifest), `policy.yaml` (OpenShell policy), and
-`justfile`.
+`justfile`. It gets no lockfile of its own — it resolves and locks into the
+single root `uv.lock` (see "The one rule" below).
 
 ## The one rule
 
@@ -104,8 +105,15 @@ just deploy hello-agent spark.local --image   # ship a built image instead
 
 | Path | What |
 |---|---|
-| `agents/<name>/` | One self-contained agent project. Own deps, own lock, own manifest + policy. |
+| `agents/<name>/` | One self-contained agent project. Own manifest + policy, shares the root `uv.lock`. |
 | `services/dashboard/` | SquidWard React dashboard. Own pnpm lockfile and build. |
+| `services/ingestion/` | Durable SQLite ingestion API; GPU/memory telemetry, findings, recommendations. |
+| `services/processing/` | Deterministic rules + Isolation Forest/autoencoder detection pipeline. |
+| `services/demo/` | Demo traffic generation and live/simulate CLIs (`just s demo ...`). |
+| `services/collector/` | Event collection service. |
 | `libs/agentkit/` | Shared Python package — FastAPI service factory, `agents.yaml`/`policy.yaml` validation. |
 | `libs/policies/` | Reusable OpenShell policy fragments. |
+| `libs/skills/` | Shared OpenClaw/Claude skills, symlinked into `claude-plugin/`. |
+| `contracts/` | Shared, review-gated schema/contract definitions. |
+| `infra/` | GB10 deployment (Ansible/Docker) and OpenClaw desired state. |
 | `scripts/deploy.sh` | rsync+apply, or image push. |
