@@ -124,6 +124,9 @@ def healthy(conn: sqlite3.Connection) -> bool:
         return False
 
 
+DEMO_RUN_ID = "run-synthetic-001"
+
+
 # --- events -------------------------------------------------------------
 
 
@@ -521,6 +524,83 @@ def counts(conn: sqlite3.Connection) -> dict[str, int]:
     return {
         table: int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]) for table in tables
     }
+
+
+def clear_demo_data(conn: sqlite3.Connection) -> dict[str, int]:
+    """Remove only records derived from the deterministic synthetic demo run."""
+    event_rows = conn.execute("SELECT event_id, raw FROM events").fetchall()
+    event_ids = []
+    for row in event_rows:
+        payload = json.loads(row["raw"])
+        attributes = payload.get("attributes", {}) if isinstance(payload, dict) else {}
+        if isinstance(attributes, dict) and attributes.get("openshell_run_id") == DEMO_RUN_ID:
+            event_ids.append(str(row["event_id"]))
+
+    demo_event_ids = set(event_ids)
+    finding_ids = []
+    if demo_event_ids:
+        for row in conn.execute("SELECT finding_id, event_ids FROM findings").fetchall():
+            related = set(json.loads(row["event_ids"]))
+            if related and related.issubset(demo_event_ids):
+                finding_ids.append(str(row["finding_id"]))
+
+    recommendation_ids = _select_ids(
+        conn, "recommendations", "recommendation_id", "finding_id", finding_ids
+    )
+    counts_removed = {
+        "events": len(event_ids),
+        "findings": len(finding_ids),
+        "recommendations": len(recommendation_ids),
+        "decisions": _count_where_in(conn, "decisions", "recommendation_id", recommendation_ids),
+        "enforcement_results": _count_where_in(
+            conn, "enforcement_results", "recommendation_id", recommendation_ids
+        ),
+        "labels": _count_where_in(conn, "finding_labels", "finding_id", finding_ids),
+        "rules": _count_where_in(conn, "rules", "recommendation_id", recommendation_ids),
+    }
+    with conn:
+        _delete_where_in(conn, "enforcement_results", "recommendation_id", recommendation_ids)
+        _delete_where_in(conn, "decisions", "recommendation_id", recommendation_ids)
+        _delete_where_in(conn, "rules", "recommendation_id", recommendation_ids)
+        _delete_where_in(conn, "finding_labels", "finding_id", finding_ids)
+        _delete_where_in(conn, "recommendations", "recommendation_id", recommendation_ids)
+        _delete_where_in(conn, "findings", "finding_id", finding_ids)
+        _delete_where_in(conn, "events", "event_id", event_ids)
+    return counts_removed
+
+
+def _select_ids(
+    conn: sqlite3.Connection,
+    table: str,
+    selected_column: str,
+    filter_column: str,
+    values: list[str],
+) -> list[str]:
+    if not values:
+        return []
+    placeholders = ",".join("?" for _ in values)
+    rows = conn.execute(
+        f"SELECT {selected_column} FROM {table} WHERE {filter_column} IN ({placeholders})",
+        values,
+    ).fetchall()
+    return [str(row[selected_column]) for row in rows]
+
+
+def _count_where_in(conn: sqlite3.Connection, table: str, column: str, values: list[str]) -> int:
+    if not values:
+        return 0
+    placeholders = ",".join("?" for _ in values)
+    return int(
+        conn.execute(
+            f"SELECT COUNT(*) FROM {table} WHERE {column} IN ({placeholders})", values
+        ).fetchone()[0]
+    )
+
+
+def _delete_where_in(conn: sqlite3.Connection, table: str, column: str, values: list[str]) -> None:
+    if values:
+        placeholders = ",".join("?" for _ in values)
+        conn.execute(f"DELETE FROM {table} WHERE {column} IN ({placeholders})", values)
 
 
 # --- rules (what squid asks for) ----------------------------------------

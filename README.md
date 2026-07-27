@@ -28,6 +28,20 @@ and launches the dashboard at `http://127.0.0.1:8300`. Data remains available
 in `data/demo-pipeline.db` after the demo stops. Set `DEMO_PIPELINE_RESET=0` to
 reuse the existing database instead of resetting it at startup.
 
+To populate the database used by an already-running ingestion API, or remove
+only that synthetic run while preserving real captures:
+
+```bash
+just s ingestion run              # terminal 1; SQLite is durable
+just demo-seed                     # terminal 2; posts 26 events through the API
+just demo-clear                    # removes demo events/findings/actions only
+just demo-seed http://HOST:8100  # target another running appliance
+```
+
+Demo cleanup identifies the synthetic `run-synthetic-001` marker and also
+removes findings, recommendations, decisions, enforcement results, and rules
+derived exclusively from those events. It does not truncate the database.
+
 On the GB10, the dashboard API reads GPU utilization from `nvidia-smi` and
 unified-memory usage from `/proc/meminfo`. Configure `.env`, then run:
 
