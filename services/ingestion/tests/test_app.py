@@ -49,6 +49,7 @@ def approval(
 def clean_db() -> Iterator[None]:
     for table in (
         "events",
+        "event_assessments",
         "findings",
         "recommendations",
         "decisions",
@@ -96,6 +97,23 @@ def test_post_then_get_events(client: TestClient) -> None:
     # `uri` of a CONNECT reduces to the destination the rules key on.
     assert events[0]["destination"] == "evil.test:443"
     assert events[0]["req_bytes"] == 101326
+
+
+def test_event_assessment_is_returned_with_the_event(client: TestClient) -> None:
+    posted = client.post("/v1/events", json=[SQUID_EVENT])
+    event_id = posted.json()["event_ids"][0]
+    assessment = {
+        "schema_version": "1.0",
+        "event_id": event_id,
+        "risk_score": 17.25,
+        "model_version": "rules-001",
+    }
+    response = client.post("/v1/event-assessments", json=assessment)
+    assert response.status_code == 201
+    assert response.json()["accepted"] == 1
+    event = client.get("/v1/events").json()["events"][0]
+    assert event["risk_score"] == 17.25
+    assert event["model_version"] == "rules-001"
 
 
 def test_unknown_fields_are_preserved_not_rejected(client: TestClient) -> None:
@@ -153,6 +171,18 @@ def test_canonical_pipeline_is_persisted_and_returned_in_contract_shape(
     }
 
     assert client.post("/v1/events", json=event).status_code == 201
+    assert (
+        client.post(
+            "/v1/event-assessments",
+            json={
+                "schema_version": "1.0",
+                "event_id": event["event_id"],
+                "risk_score": 95,
+                "model_version": "rules-001",
+            },
+        ).status_code
+        == 201
+    )
     assert client.post("/v1/findings", json=finding).status_code == 201
     assert client.post("/v1/recommendations", json=recommendation).status_code == 201
     returned = client.get("/v1/events").json()["events"][0]
@@ -188,6 +218,7 @@ def test_canonical_pipeline_is_persisted_and_returned_in_contract_shape(
     assert cleared.status_code == 200
     assert cleared.json()["removed"] == {
         "events": 1,
+        "event_assessments": 1,
         "findings": 1,
         "recommendations": 1,
         "decisions": 1,

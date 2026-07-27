@@ -38,6 +38,13 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
 CREATE INDEX IF NOT EXISTS idx_events_dest ON events(destination);
 
+CREATE TABLE IF NOT EXISTS event_assessments (
+    event_id       TEXT PRIMARY KEY,
+    risk_score     REAL NOT NULL,
+    model_version  TEXT NOT NULL,
+    ts             REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS findings (
     finding_id  TEXT PRIMARY KEY,
     ts          REAL NOT NULL,
@@ -243,6 +250,49 @@ def events_by_ids(conn: sqlite3.Connection, ids: list[str]) -> list[dict[str, An
         f"SELECT * FROM events WHERE event_id IN ({marks}) ORDER BY ts", ids
     ).fetchall()
     return [_event_payload(r) for r in rows]
+
+
+def put_event_assessments(conn: sqlite3.Connection, assessments: list[dict[str, Any]]) -> int:
+    now = time.time()
+    with conn:
+        conn.executemany(
+            """
+            INSERT INTO event_assessments(event_id, risk_score, model_version, ts)
+            VALUES (?,?,?,?)
+            ON CONFLICT(event_id) DO UPDATE SET
+              risk_score=excluded.risk_score,
+              model_version=excluded.model_version,
+              ts=excluded.ts
+            """,
+            [
+                (
+                    assessment["event_id"],
+                    float(assessment["risk_score"]),
+                    assessment["model_version"],
+                    now,
+                )
+                for assessment in assessments
+            ],
+        )
+    return len(assessments)
+
+
+def event_assessments(conn: sqlite3.Connection, event_ids: list[str]) -> dict[str, dict[str, Any]]:
+    if not event_ids:
+        return {}
+    placeholders = ",".join("?" for _ in event_ids)
+    rows = conn.execute(
+        f"SELECT event_id, risk_score, model_version FROM event_assessments"
+        f" WHERE event_id IN ({placeholders})",
+        event_ids,
+    ).fetchall()
+    return {
+        str(row["event_id"]): {
+            "risk_score": float(row["risk_score"]),
+            "model_version": str(row["model_version"]),
+        }
+        for row in rows
+    }
 
 
 # --- findings and recommendations ---------------------------------------
@@ -641,6 +691,7 @@ def clear_demo_data(conn: sqlite3.Connection) -> dict[str, int]:
     )
     counts_removed = {
         "events": len(event_ids),
+        "event_assessments": _count_where_in(conn, "event_assessments", "event_id", event_ids),
         "findings": len(finding_ids),
         "recommendations": len(recommendation_ids),
         "decisions": _count_where_in(conn, "decisions", "recommendation_id", recommendation_ids),
@@ -651,6 +702,7 @@ def clear_demo_data(conn: sqlite3.Connection) -> dict[str, int]:
         "rules": _count_where_in(conn, "rules", "recommendation_id", recommendation_ids),
     }
     with conn:
+        _delete_where_in(conn, "event_assessments", "event_id", event_ids)
         _delete_where_in(conn, "enforcement_results", "recommendation_id", recommendation_ids)
         _delete_where_in(conn, "decisions", "recommendation_id", recommendation_ids)
         _delete_where_in(conn, "rules", "recommendation_id", recommendation_ids)

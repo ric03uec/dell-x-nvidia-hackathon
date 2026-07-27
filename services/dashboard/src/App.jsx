@@ -11,6 +11,9 @@ import {
   toSystemStatusView,
 } from "./api/index.js";
 import { useDashboardData } from "./api/useDashboardData.js";
+import { demoPageData } from "./demoData.js";
+
+const DEMO_PAGES_ENABLED = import.meta.env.VITE_ENABLE_DEMO_PAGES !== "false";
 
 const Icon = {
   grid: "M2.5 2.5h4v4h-4zM9.5 2.5h4v4h-4zM2.5 9.5h4v4h-4zM9.5 9.5h4v4h-4z",
@@ -40,13 +43,30 @@ const navSections = [
     items: [
       { id: "dashboard", label: "Overview", icon: "grid" },
       { id: "events", label: "Live Events", icon: "activity" },
+      ...(DEMO_PAGES_ENABLED
+        ? [{ id: "cve", label: "CVE Intelligence", icon: "shield", count: 7 }]
+        : []),
     ],
   },
+  ...(DEMO_PAGES_ENABLED
+    ? [{
+        label: "Inventory",
+        items: [
+          { id: "assets", label: "Asset Discovery", icon: "server" },
+          { id: "models", label: "Model Registry", icon: "layers" },
+          { id: "feedback", label: "Analyst Feedback", icon: "review", count: 23 },
+        ],
+      }]
+    : []),
 ];
 
 const pageMeta = {
   dashboard: ["Security Operations", "Exfiltration protection", "local first"],
   events: ["Live Events", "Event stream", "local inference"],
+  cve: ["CVE Intelligence", "Vulnerability context", "demo data"],
+  assets: ["Asset Discovery", "Network inventory", "demo data"],
+  models: ["Model Registry", "Detection models", "demo data"],
+  feedback: ["Analyst Feedback", "Review queue", "demo data"],
 };
 
 const ranges = ["1H", "4H", "1D", "1W", "1M"];
@@ -250,6 +270,7 @@ function App() {
           </label>
           <div className="chips">
             <span className="chip">source:<b>ingestion</b></span>
+            {DEMO_PAGES_ENABLED ? <span className="chip chip-warn">demo pages</span> : null}
             <span className={`chip ${live.stale || dataUnavailable ? "chip-warn" : "chip-ok"}`}>
               <i /> {live.stale ? "Stale data" : dataUnavailable ? "Waiting for API" : system.appliance.mode}
             </span>
@@ -274,6 +295,8 @@ function App() {
             />
           ) : activePage === "events" ? (
             <LiveEventsPage events={liveEvents} metrics={overviewMetrics} needle={needle} onOpenIncident={openIncident} />
+          ) : DEMO_PAGES_ENABLED && demoPageData[activePage] ? (
+            <DataPage data={demoPageData[activePage]} needle={needle} notify={notify} />
           ) : null}
         </main>
 
@@ -427,7 +450,8 @@ function MetricStrip({ metrics }) {
 
 function Dashboard({ findings, notify, range, system, theme, needle, events, metrics, onOpenIncident }) {
   const visibleFindings = findings.filter((finding) => matches(finding, needle));
-  const visibleEvents = events.filter((event) => matches(event, needle));
+  const assessedEvents = events.filter((event) => typeof event.risk === "number");
+  const visibleEvents = assessedEvents.filter((event) => matches(event, needle));
 
   return (
     <>
@@ -490,7 +514,7 @@ function Dashboard({ findings, notify, range, system, theme, needle, events, met
         </Panel>
 
         <Panel
-          action={<CountBadge shown={visibleEvents.length} total={events.length} />}
+          action={<CountBadge shown={visibleEvents.length} total={assessedEvents.length} />}
           meta="Rules + isolation forest"
           title="Live high-risk events"
         >
@@ -713,6 +737,68 @@ function DrawerSection({ children, meta, title }) {
       {children}
     </section>
   );
+}
+
+function DataPage({ data, notify, needle }) {
+  const visible = data.rows.filter((row) => matches(row, needle));
+  const total = data.columns.reduce((sum, item) => sum + parseFloat(item.width), 0);
+
+  return (
+    <>
+      <MetricStrip metrics={data.metrics} />
+      <Panel
+        action={<CountBadge shown={visible.length} total={data.rows.length} />}
+        className="table-panel"
+        meta={data.meta}
+        title={data.title}
+      >
+        <table className="grid-table">
+          <colgroup>
+            {data.columns.map((column) => (
+              <col key={column.key} style={{ width: `${(parseFloat(column.width) / total) * 100}%` }} />
+            ))}
+          </colgroup>
+          <thead>
+            <tr>
+              {data.columns.map((column) => (
+                <th className={column.align === "right" ? "num" : ""} key={column.key}>{column.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {visible.length === 0 && <EmptyRow span={data.columns.length} />}
+            {visible.map((row) => {
+              const label = flatten(row[0]);
+              const open = () => notify(`${label} selected`);
+              return (
+                <tr key={label} onClick={open} onKeyDown={activateOnKey(open)} tabIndex={0}>
+                  {row.map((cell, cellIndex) => (
+                    <Cell align={data.columns[cellIndex].align} cell={cell} key={data.columns[cellIndex].key} />
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </Panel>
+    </>
+  );
+}
+
+function Cell({ cell, align }) {
+  if (Array.isArray(cell)) {
+    return (
+      <td>
+        <span className="cell-lead">{cell[0]}</span>
+        <span className="cell-sub">{cell[1]}</span>
+      </td>
+    );
+  }
+  if (cell && typeof cell === "object") {
+    if (typeof cell.risk === "number") return <td><RiskMeter risk={cell.risk} /></td>;
+    return <td><span className={`badge ${cell.level}`}><i />{cell.badge}</span></td>;
+  }
+  return <td className={`${align === "right" ? "num mono" : ""}`}>{cell}</td>;
 }
 
 function RiskMeter({ risk }) {

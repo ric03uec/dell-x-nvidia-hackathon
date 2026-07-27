@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -14,7 +14,7 @@ class IngestionClient:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
-    def _post(self, path: str, payload: Mapping[str, Any]) -> None:
+    def _post(self, path: str, payload: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> None:
         request = Request(
             f"{self.base_url}{path}",
             data=json.dumps(payload).encode(),
@@ -38,3 +38,6 @@ class IngestionClient:
 
     def post_recommendation(self, recommendation: Mapping[str, Any]) -> None:
         self._post("/v1/recommendations", recommendation)
+
+    def post_event_assessments(self, assessments: Sequence[Mapping[str, Any]]) -> None:
+        self._post("/v1/event-assessments", assessments)

@@ -57,6 +57,16 @@ class LiveScorer:
                 anomaly_model=self.model,
                 threshold=self.threshold,
             )
+            self.client.post_event_assessments(
+                [
+                    {
+                        "schema_version": "1.0",
+                        "event_id": event["event_id"],
+                        "risk_score": round(detection.risk_score, 2),
+                        "model_version": self.model.version if self.model else "rules-001",
+                    }
+                ]
+            )
             if detection.finding is not None:
                 self.client.post_finding(detection.finding)
         return len(events)
