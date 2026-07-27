@@ -38,7 +38,7 @@ class OpenClawClient:
         )
         request = Request(
             f"{self.base_url}/v1/responses",
-            data=json.dumps({"model": "openclaw:main", "input": prompt}).encode(),
+            data=json.dumps({"model": "openclaw", "input": prompt}).encode(),
             headers={
                 "Accept": "application/json",
                 "Authorization": f"Bearer {self.token}",

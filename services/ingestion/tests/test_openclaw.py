@@ -38,5 +38,6 @@ def test_investigation_trigger_sends_only_the_finding_reference(monkeypatch) -> 
     assert request.headers["Authorization"] == "Bearer secret-token"
     assert request.headers["X-openclaw-agent-id"] == "main"
     assert timeout == 12
+    assert payload["model"] == "openclaw"
     assert "finding-001" in payload["input"]
     assert "evidence" not in payload
