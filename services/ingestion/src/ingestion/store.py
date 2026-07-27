@@ -78,6 +78,16 @@ CREATE TABLE IF NOT EXISTS finding_labels (
     payload     TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS investigations (
+    finding_id    TEXT PRIMARY KEY,
+    status        TEXT NOT NULL,
+    summary       TEXT,
+    served_model  TEXT,
+    route         TEXT NOT NULL,
+    error         TEXT,
+    ts            REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS snapshots (
     snapshot_id TEXT PRIMARY KEY,
     ts          REAL NOT NULL,
@@ -308,6 +318,50 @@ def list_findings(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     return [_finding_payload(row) for row in rows]
 
 
+def put_investigation(
+    conn: sqlite3.Connection,
+    finding_id: str,
+    status: str,
+    summary: str | None = None,
+    served_model: str | None = None,
+    error: str | None = None,
+) -> dict[str, Any] | None:
+    if get_finding(conn, finding_id) is None:
+        return None
+    now = time.time()
+    conn.execute(
+        """
+        INSERT INTO investigations(
+          finding_id, status, summary, served_model, route, error, ts
+        ) VALUES (?,?,?,?,?,?,?)
+        ON CONFLICT(finding_id) DO UPDATE SET
+          status=excluded.status, summary=excluded.summary,
+          served_model=excluded.served_model, route=excluded.route,
+          error=excluded.error, ts=excluded.ts
+        """,
+        (finding_id, status, summary, served_model, "openclaw-local", error, now),
+    )
+    conn.commit()
+    return get_investigation(conn, finding_id)
+
+
+def get_investigation(conn: sqlite3.Connection, finding_id: str) -> dict[str, Any] | None:
+    row = conn.execute(
+        "SELECT * FROM investigations WHERE finding_id = ?", (finding_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    investigation = dict(row)
+    investigation["schema_version"] = "1.0"
+    investigation["updated_at"] = (
+        datetime.fromtimestamp(investigation.pop("ts")).astimezone().isoformat()
+    )
+    investigation.pop("finding_id")
+    if investigation["error"] is None:
+        investigation.pop("error")
+    return investigation
+
+
 def add_recommendation(
     conn: sqlite3.Connection,
     action_type: str,
@@ -406,7 +460,11 @@ def list_recommendations(
 
 
 def decide(
-    conn: sqlite3.Connection, recommendation_id: str, approve: bool, actor: str
+    conn: sqlite3.Connection,
+    recommendation_id: str,
+    approve: bool,
+    actor: str,
+    payload: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Approve or reject. Approval of a block is the ONLY path into `rules`."""
     row = conn.execute(
@@ -417,11 +475,16 @@ def decide(
 
     rec = dict(row)
     status = "approved" if approve else "rejected"
+    existing = get_decision(conn, recommendation_id)
+    if existing:
+        if existing["decision"] != status:
+            raise ValueError("recommendation already has a conflicting decision")
+        return _recommendation_payload(row)
     conn.execute(
         "UPDATE recommendations SET status = ? WHERE recommendation_id = ?",
         (status, recommendation_id),
     )
-    decision_payload = {
+    decision_payload = payload or {
         "schema_version": "1.0",
         "recommendation_id": recommendation_id,
         "decision": status,
@@ -455,6 +518,16 @@ def decide(
         "SELECT * FROM recommendations WHERE recommendation_id = ?", (recommendation_id,)
     ).fetchone()
     return _recommendation_payload(updated)
+
+
+def get_decision(conn: sqlite3.Connection, recommendation_id: str) -> dict[str, Any] | None:
+    row = conn.execute(
+        "SELECT payload FROM decisions WHERE recommendation_id = ?", (recommendation_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    payload = json.loads(row["payload"])
+    return payload if isinstance(payload, dict) else None
 
 
 def add_label(conn: sqlite3.Connection, finding_id: str, payload: dict[str, Any]) -> None:

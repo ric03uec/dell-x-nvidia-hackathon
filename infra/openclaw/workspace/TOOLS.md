@@ -14,6 +14,16 @@
 Some profile tools require optional providers or integrations and may be
 unavailable at runtime. Inspect tool results rather than assuming availability.
 
+## SquidWard Ingestion
+
+- Use `get_evidence` as the authoritative source for a finding and its event
+  timeline.
+- Use `query_events` for additional observed traffic context.
+- Persist completed or failed analysis with `submit_investigation`.
+- Use `recommend_policy` only for a pending `deny_destination` recommendation.
+- Never approve recommendations or write enforcement rules. Those actions
+  require an explicit analyst decision through the dashboard.
+
 ## Operating Rules
 
 - Inspect current state before changing it.

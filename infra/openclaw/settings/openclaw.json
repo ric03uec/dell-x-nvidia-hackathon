@@ -17,6 +17,13 @@
         "http://promaxgb10-5d0c:18789",
         "http://hack:18789"
       ]
+    },
+    "http": {
+      "endpoints": {
+        "responses": {
+          "enabled": true
+        }
+      }
     }
   },
   "agents": {
@@ -44,6 +51,23 @@
       "applyPatch": {
         "enabled": true,
         "workspaceOnly": false
+      }
+    }
+  },
+  "mcp": {
+    "servers": {
+      "squidward-ingestion": {
+        "url": "${INGESTION_MCP_URL}",
+        "transport": "streamable-http",
+        "toolFilter": {
+          "include": [
+            "query_events",
+            "get_evidence",
+            "get_rules",
+            "submit_investigation",
+            "recommend_policy"
+          ]
+        }
       }
     }
   },

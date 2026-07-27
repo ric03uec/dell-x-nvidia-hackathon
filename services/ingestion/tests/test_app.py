@@ -33,6 +33,18 @@ SQUID_EVENT: dict[str, Any] = {
 }
 
 
+def approval(
+    recommendation_id: str, decision: str, analyst: str = "analyst@example.test"
+) -> dict[str, str]:
+    return {
+        "schema_version": "1.0",
+        "recommendation_id": recommendation_id,
+        "decision": decision,
+        "analyst": analyst,
+        "timestamp": "2026-07-26T14:02:00Z",
+    }
+
+
 @pytest.fixture(autouse=True)
 def clean_db() -> Iterator[None]:
     for table in (
@@ -42,11 +54,13 @@ def clean_db() -> Iterator[None]:
         "decisions",
         "enforcement_results",
         "finding_labels",
+        "investigations",
         "snapshots",
         "rules",
     ):
         conn.execute(f"DELETE FROM {table}")
     conn.commit()
+    app.state.openclaw = None
     yield
 
 
@@ -138,7 +152,7 @@ def test_canonical_pipeline_is_persisted_and_returned_in_contract_shape(
 
     decision = client.post(
         "/v1/recommendations/rec-canonical-001/decision",
-        json={"schema_version": "1.0", "decision": "approved"},
+        json=approval("rec-canonical-001", "approved"),
     )
     assert decision.status_code == 200
     assert decision.json()["decision"]["decision"] == "approved"
@@ -149,6 +163,7 @@ def test_canonical_pipeline_is_persisted_and_returned_in_contract_shape(
         "enforcement_result_id": "enf-canonical-001",
         "recommendation_id": "rec-canonical-001",
         "status": "applied",
+        "enforcement_point": "squid",
     }
     assert client.post("/v1/enforcement-results", json=enforcement).status_code == 201
     assert client.get("/v1/enforcement-results").json()["count"] == 1
@@ -186,7 +201,7 @@ def test_recommendation_only_becomes_a_rule_after_approval(client: TestClient) -
 
     approved = client.post(
         f"/v1/recommendations/{rec_id}/decision",
-        json={"approve": True, "actor": "analyst@example.test"},
+        json=approval(rec_id, "approved"),
     )
     assert approved.status_code == 200
     assert approved.json()["recommendation"]["status"] == "approved"
@@ -200,7 +215,7 @@ def test_rejection_does_not_create_a_rule(client: TestClient) -> None:
     rec_id = store.add_recommendation(conn, "deny_destination", "fine.test", "false positive")
     client.post(
         f"/v1/recommendations/{rec_id}/decision",
-        json={"approve": False, "actor": "analyst@example.test"},
+        json=approval(rec_id, "rejected"),
     )
     assert client.get("/v1/rules").json()["rules"] == []
 
@@ -209,7 +224,7 @@ def test_rules_txt_is_squid_dstdomain_format(client: TestClient) -> None:
     rec_id = store.add_recommendation(conn, "deny_destination", "evil.test", "why")
     client.post(
         f"/v1/recommendations/{rec_id}/decision",
-        json={"approve": True, "actor": "a@b.test"},
+        json=approval(rec_id, "approved", "a@b.test"),
     )
     body = client.get("/v1/rules.txt")
     assert body.headers["content-type"].startswith("text/plain")
@@ -221,7 +236,7 @@ def test_check_matches_subdomains(client: TestClient) -> None:
     rec_id = store.add_recommendation(conn, "deny_destination", "evil.test", "why")
     client.post(
         f"/v1/recommendations/{rec_id}/decision",
-        json={"approve": True, "actor": "a@b.test"},
+        json=approval(rec_id, "approved", "a@b.test"),
     )
     check = "/v1/rules/check"
     # Parent-domain match, matching squid's own dstdomain semantics.
@@ -236,7 +251,7 @@ def test_decision_on_unknown_recommendation_is_404(client: TestClient) -> None:
     assert (
         client.post(
             "/v1/recommendations/rec-nope/decision",
-            json={"approve": True, "actor": "a@b.test"},
+            json=approval("rec-nope", "approved", "a@b.test"),
         ).status_code
         == 404
     )
@@ -256,6 +271,7 @@ async def test_mcp_client_lists_and_calls_tools() -> None:
             "get_evidence",
             "get_rules",
             "submit_finding",
+            "submit_investigation",
             "recommend_policy",
         } <= names
 
@@ -275,7 +291,13 @@ async def test_recommend_policy_rejects_an_action_outside_the_enum() -> None:
         with pytest.raises(ToolError):
             await mcp_client.call_tool(
                 "recommend_policy",
-                {"action_type": "rm -rf /", "destination": "evil.test", "rationale": "x"},
+                {
+                    "finding_id": "finding-001",
+                    "action_type": "rm -rf /",
+                    "target": "evil.test",
+                    "scope": "business-agent",
+                    "reason": "x",
+                },
             )
 
 
@@ -289,9 +311,10 @@ async def test_mcp_recommendation_is_visible_to_rest(client: TestClient) -> None
         result = await mcp_client.call_tool(
             "recommend_policy",
             {
-                "action_type": "deny_destination",
-                "destination": "evil.test",
-                "rationale": "25MB to an unseen host",
+                "finding_id": "finding-001",
+                "target": "evil.test",
+                "scope": "business-agent",
+                "reason": "25MB to an unseen host",
             },
         )
         rec_id = result.data["recommendation_id"]
@@ -308,3 +331,61 @@ def test_mcp_endpoint_is_mounted_with_lifespan(client: TestClient) -> None:
     # A GET without the MCP headers is rejected by the protocol, not 404 —
     # which proves something is actually mounted and speaking MCP.
     assert client.get("/mcp/").status_code != 404
+
+
+class PersistingOpenClaw:
+    def investigate(self, finding_id: str) -> None:
+        store.put_investigation(
+            conn,
+            finding_id,
+            "completed",
+            summary="OpenClaw verified the correlated transfer.",
+            served_model="Qwen3.6-27B-FP8",
+        )
+
+
+def test_openclaw_investigation_is_persisted(client: TestClient) -> None:
+    finding = {
+        "schema_version": "1.0",
+        "finding_id": "finding-001",
+        "event_ids": ["evt-001"],
+        "risk_score": 92,
+        "severity": "critical",
+        "summary": "Correlated transfer.",
+    }
+    client.post(
+        "/v1/events",
+        json={
+            "schema_version": "1.0",
+            "event_id": "evt-001",
+            "timestamp": "2026-07-26T14:00:00Z",
+            "source_type": "openshell",
+            "actor": "business-agent",
+            "action": "http_post",
+        },
+    )
+    client.post("/v1/findings", json=finding)
+    app.state.openclaw = PersistingOpenClaw()
+
+    response = client.post("/v1/findings/finding-001/investigate", json={"schema_version": "1.0"})
+    assert response.status_code == 200
+    assert response.json()["investigation"]["status"] == "completed"
+    detail = client.get("/v1/findings/finding-001").json()["finding"]
+    assert detail["investigation"]["route"] == "openclaw-local"
+
+
+def test_unconfigured_openclaw_returns_versioned_failure(client: TestClient) -> None:
+    store.put_finding(
+        conn,
+        {
+            "schema_version": "1.0",
+            "finding_id": "finding-001",
+            "event_ids": ["evt-001"],
+            "risk_score": 80,
+            "severity": "high",
+        },
+    )
+    response = client.post("/v1/findings/finding-001/investigate", json={"schema_version": "1.0"})
+    assert response.status_code == 503
+    assert response.json()["schema_version"] == "1.0"
+    assert response.json()["investigation"]["status"] == "failed"

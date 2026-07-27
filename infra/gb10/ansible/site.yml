@@ -105,8 +105,9 @@
         gateway_token="${OPENCLAW_GATEWAY_TOKEN:-$(openssl rand -hex 32)}"
         source {{ litellm_env_file | quote }}
         umask 077
-        printf 'LITELLM_API_KEY=%q\nOPENCLAW_GATEWAY_TOKEN=%q\n' \
-          "${LITELLM_MASTER_KEY}" "${gateway_token}" > {{ openclaw_runtime_env_file | quote }}
+        printf 'LITELLM_API_KEY=%q\nOPENCLAW_GATEWAY_TOKEN=%q\nINGESTION_MCP_URL=%q\n' \
+          "${LITELLM_MASTER_KEY}" "${gateway_token}" \
+          'http://127.0.0.1:8100/mcp/' > {{ openclaw_runtime_env_file | quote }}
       args:
         executable: /bin/bash
       no_log: true

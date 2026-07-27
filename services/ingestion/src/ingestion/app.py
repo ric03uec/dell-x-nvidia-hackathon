@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import os
+import uuid
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI, HTTPException, Query, Response
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse, JSONResponse
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
 
 from . import store
+from .openclaw import OpenClawClient, OpenClawError
+from .runtime import GpuTelemetryCollector, inference_status, observed_at
 
 SCHEMA_VERSION = "1.0"
 DB_PATH = os.environ.get("INGESTION_DB_PATH", os.environ.get("INGESTION_DB", "data/exfilguard.db"))
@@ -71,9 +74,21 @@ class EnforcementResultIn(BaseModel):
     model_config = {"extra": "allow"}
 
     schema_version: Literal["1.0"]
-    enforcement_result_id: str
+    enforcement_result_id: str | None = None
     recommendation_id: str
-    status: str
+    status: Literal["applied", "failed"]
+    enforcement_point: str
+    policy_version: str | None = None
+
+
+class ApprovalIn(BaseModel):
+    model_config = {"extra": "allow"}
+
+    schema_version: Literal["1.0"]
+    recommendation_id: str
+    decision: Literal["approved", "rejected"]
+    analyst: str = Field(min_length=1)
+    timestamp: str
 
 
 mcp = FastMCP("squidward-ingestion")
@@ -103,21 +118,73 @@ def get_rules() -> dict[str, Any]:
 
 
 @mcp.tool
-def submit_finding(summary: str, risk_score: int, event_ids: list[str]) -> dict[str, Any]:
-    """Record a correlated finding over persisted events."""
-    return {"finding_id": store.add_finding(conn, summary, risk_score, event_ids)}
+def submit_finding(
+    finding_id: str,
+    event_ids: list[str],
+    risk_score: float,
+    severity: Literal["low", "medium", "high", "critical"],
+    summary: str = "",
+    detectors: list[str] | None = None,
+    model_version: str | None = None,
+) -> dict[str, Any]:
+    """Record a canonical detector finding over persisted events."""
+    store.put_finding(
+        conn,
+        {
+            "schema_version": SCHEMA_VERSION,
+            "finding_id": finding_id,
+            "event_ids": event_ids,
+            "risk_score": risk_score,
+            "severity": severity,
+            "detectors": detectors or [],
+            "summary": summary,
+            "model_version": model_version,
+        },
+    )
+    return {"finding_id": finding_id}
+
+
+@mcp.tool
+def submit_investigation(
+    finding_id: str,
+    status: Literal["completed", "failed"],
+    summary: str | None = None,
+    served_model: str | None = None,
+) -> dict[str, Any]:
+    """Persist the local security agent's analysis for a finding."""
+    investigation = store.put_investigation(
+        conn, finding_id, status, summary=summary, served_model=served_model
+    )
+    return (
+        {"investigation": investigation}
+        if investigation
+        else {"error": f"no such finding: {finding_id}"}
+    )
 
 
 @mcp.tool
 def recommend_policy(
-    action_type: ActionType,
-    destination: str,
-    rationale: str,
-    finding_id: str | None = None,
+    finding_id: str,
+    target: str,
+    scope: str,
+    reason: str,
+    expires_at: str | None = None,
+    action_type: ActionType = "deny_destination",
 ) -> dict[str, Any]:
     """Recommend a constrained action; enforcement still requires approval."""
-    recommendation_id = store.add_recommendation(
-        conn, action_type, destination, rationale, finding_id
+    recommendation_id = f"rec-{uuid.uuid4().hex[:12]}"
+    store.put_recommendation(
+        conn,
+        {
+            "schema_version": SCHEMA_VERSION,
+            "recommendation_id": recommendation_id,
+            "finding_id": finding_id,
+            "action_type": action_type,
+            "target": target,
+            "scope": scope,
+            "reason": reason,
+            "expires_at": expires_at,
+        },
     )
     return {"recommendation_id": recommendation_id, "status": "pending"}
 
@@ -125,6 +192,8 @@ def recommend_policy(
 mcp_app = mcp.http_app(path="/")
 app = FastAPI(title="squidward-ingestion", lifespan=mcp_app.lifespan)
 app.mount("/mcp", mcp_app)
+app.state.gpu_collector = GpuTelemetryCollector()
+app.state.openclaw = OpenClawClient.from_env()
 
 
 @app.get("/health")
@@ -204,21 +273,56 @@ def post_label(finding_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     return envelope(finding_id=finding_id, accepted=True)
 
 
-@app.post("/v1/findings/{finding_id}/investigate", status_code=503)
-def investigate(finding_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+@app.post("/v1/findings/{finding_id}/investigate", response_model=None)
+def investigate(
+    finding_id: str, payload: dict[str, Any], request: Request
+) -> Response | dict[str, Any]:
     _require_version(payload)
     if store.get_finding(conn, finding_id) is None:
         raise HTTPException(404, "no such finding")
-    return envelope(
-        error={"code": "inference_unconfigured", "message": "Use processing inference"},
-        investigation={
-            "schema_version": SCHEMA_VERSION,
-            "status": "unavailable",
-            "summary": None,
-            "served_model": None,
-            "route": None,
-        },
-    )
+    current = store.get_investigation(conn, finding_id)
+    if current and current["status"] == "completed":
+        return envelope(investigation=current)
+    client: OpenClawClient | None = request.app.state.openclaw
+    if client is None:
+        failed = store.put_investigation(
+            conn, finding_id, "failed", error="OpenClaw gateway is not configured"
+        )
+        return JSONResponse(
+            status_code=503,
+            content=envelope(
+                error={"code": "openclaw_unconfigured", "message": "OpenClaw is unavailable"},
+                investigation=failed,
+            ),
+        )
+    store.put_investigation(conn, finding_id, "running")
+    try:
+        client.investigate(finding_id)
+    except OpenClawError as error:
+        failed = store.put_investigation(conn, finding_id, "failed", error=str(error))
+        return JSONResponse(
+            status_code=502,
+            content=envelope(
+                error={"code": "openclaw_failed", "message": str(error)},
+                investigation=failed,
+            ),
+        )
+    completed = store.get_investigation(conn, finding_id)
+    if completed is None or completed["status"] != "completed":
+        failed = store.put_investigation(
+            conn, finding_id, "failed", error="OpenClaw did not persist an investigation"
+        )
+        return JSONResponse(
+            status_code=502,
+            content=envelope(
+                error={
+                    "code": "investigation_not_persisted",
+                    "message": "OpenClaw did not persist an investigation",
+                },
+                investigation=failed,
+            ),
+        )
+    return envelope(investigation=completed)
 
 
 @app.post("/v1/recommendations", status_code=201)
@@ -230,35 +334,32 @@ def post_recommendation(recommendation: RecommendationIn) -> dict[str, Any]:
 @app.get("/v1/recommendations")
 def get_recommendations(status: str | None = None) -> dict[str, Any]:
     recommendations = store.list_recommendations(conn, status)
+    for recommendation in recommendations:
+        decision = store.get_decision(conn, recommendation["recommendation_id"])
+        if decision:
+            recommendation["decision"] = decision
     return envelope(count=len(recommendations), recommendations=recommendations)
 
 
 @app.post("/v1/recommendations/{recommendation_id}/decision")
-def post_decision(recommendation_id: str, decision: dict[str, Any]) -> dict[str, Any]:
-    _require_version(decision, optional=True)
-    if "decision" in decision:
-        value = decision["decision"]
-        if value not in {"approved", "rejected"}:
-            raise HTTPException(400, "decision must be approved or rejected")
-        approve = value == "approved"
-        actor = str(decision.get("analyst") or decision.get("actor") or "demo-analyst")
-    else:
-        if not isinstance(decision.get("approve"), bool):
-            raise HTTPException(400, "decision or approve is required")
-        approve = decision["approve"]
-        actor = str(decision.get("actor") or "demo-analyst")
-    recommendation = store.decide(conn, recommendation_id, approve, actor)
+def post_decision(recommendation_id: str, decision: ApprovalIn) -> dict[str, Any]:
+    if decision.recommendation_id != recommendation_id:
+        raise HTTPException(400, "recommendation_id does not match path")
+    payload = decision.model_dump()
+    try:
+        recommendation = store.decide(
+            conn,
+            recommendation_id,
+            decision.decision == "approved",
+            decision.analyst,
+            payload,
+        )
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
     if recommendation is None:
         raise HTTPException(404, "no such recommendation")
-    return envelope(
-        recommendation=recommendation,
-        decision={
-            "schema_version": SCHEMA_VERSION,
-            "recommendation_id": recommendation_id,
-            "decision": "approved" if approve else "rejected",
-            "analyst": actor,
-        },
-    )
+    recommendation["decision"] = payload
+    return envelope(recommendation=recommendation, decision=payload)
 
 
 @app.get("/v1/policies/approved")
@@ -269,7 +370,11 @@ def get_approved_policies(after_id: str | None = None) -> dict[str, Any]:
 
 @app.post("/v1/enforcement-results", status_code=201)
 def post_enforcement_result(result: EnforcementResultIn) -> dict[str, Any]:
-    result_id = store.put_enforcement_result(conn, result.model_dump())
+    payload = result.model_dump(exclude_none=True)
+    payload["enforcement_result_id"] = result.enforcement_result_id or (
+        f"enf-{uuid.uuid4().hex[:12]}"
+    )
+    result_id = store.put_enforcement_result(conn, payload)
     return envelope(enforcement_result_id=result_id, accepted=True)
 
 
@@ -319,35 +424,58 @@ def metrics_summary(range: str | None = Query(None)) -> dict[str, Any]:  # noqa:
                 "key": "events_processed",
                 "label": "Events processed",
                 "value": counts["events"],
-                "delta": 0,
                 "tone": "neutral",
             },
             {
                 "key": "active_alerts",
                 "label": "Active alerts",
                 "value": counts["findings"],
-                "delta": 0,
                 "tone": "negative",
+            },
+            {
+                "key": "suspicious_events",
+                "label": "Suspicious events",
+                "value": len(suspicious_ids),
+                "tone": "negative",
+            },
+            {
+                "key": "pending_recommendations",
+                "label": "Pending recommendations",
+                "value": len(store.list_recommendations(conn, "pending")),
+                "tone": "neutral",
             },
         ],
     )
 
 
 @app.get("/v1/system-status")
-def system_status() -> dict[str, Any]:
+def system_status(request: Request) -> dict[str, Any]:
+    database_ok = store.healthy(conn)
+    gpu = request.app.state.gpu_collector.collect()
+    model = inference_status()
+    healthy = database_ok and gpu["status"] == "healthy" and model["status"] == "healthy"
     return envelope(
-        status="operational",
+        generated_at=observed_at(),
+        status="operational" if healthy else "degraded",
         appliance={
-            "name": "local-ingestion",
-            "model": "development",
-            "mode": "observe",
-            "address": "127.0.0.1",
-            "egress": "Local only",
-            "gpu": {"status": "unavailable"},
+            "name": os.environ.get("APPLIANCE_NAME", "gb10"),
+            "model": "GB10",
+            "mode": os.environ.get("APPLIANCE_MODE", "observe"),
+            "address": os.environ.get("MGMT_BIND_ADDR", "127.0.0.1"),
+            "egress": os.environ.get("APPLIANCE_EGRESS_STATUS"),
+            "gpu": gpu,
         },
-        ingestion={"events_per_second": 0, "queue_depth": 0},
-        model={"active_version": None},
-        components=[{"name": "event_ingestion", "status": "operational"}],
+        ingestion={"events_per_second": None, "queue_depth": None},
+        model=model,
+        components=[
+            {"name": "event_ingestion", "status": "operational" if database_ok else "degraded"},
+            {
+                "name": "openclaw",
+                "status": "configured" if request.app.state.openclaw else "unavailable",
+            },
+            {"name": "gpu", "status": gpu["status"]},
+            {"name": "inference", "status": model["status"]},
+        ],
     )
 
 
@@ -387,11 +515,20 @@ def _finding_view(finding: dict[str, Any]) -> dict[str, Any]:
     ]
     raw_evidence = finding.get("evidence", [])
     view = dict(finding)
+    investigation = store.get_investigation(conn, finding["finding_id"])
+    if investigation is None:
+        investigation = {
+            "schema_version": SCHEMA_VERSION,
+            "status": "pending" if app.state.openclaw else "unavailable",
+            "summary": None,
+            "served_model": None,
+            "route": "openclaw-local" if app.state.openclaw else None,
+        }
     view.update(
         {
             "title": "Suspicious correlated activity",
             "status": "completed",
-            "investigation_status": "unavailable",
+            "investigation_status": investigation["status"],
             "actor": related[0].get("actor") if related else "business-agent",
             "destination": recommendations[0].get("target") if recommendations else None,
             "first_seen": related[0].get("timestamp") if related else None,
@@ -417,13 +554,7 @@ def _finding_view(finding: dict[str, Any]) -> dict[str, Any]:
                 }
                 for item in raw_evidence
             ],
-            "investigation": {
-                "schema_version": SCHEMA_VERSION,
-                "status": "unavailable",
-                "summary": None,
-                "served_model": None,
-                "route": None,
-            },
+            "investigation": investigation,
             "recommendation_ids": [
                 recommendation["recommendation_id"] for recommendation in recommendations
             ],
