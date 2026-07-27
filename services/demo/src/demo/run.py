@@ -90,6 +90,28 @@ class Runner:
         except OSError:
             return []
 
+    def already_proposed(self) -> set[str]:
+        """Destinations that already have a recommendation, in any state.
+
+        Continuous mode re-investigates on a cycle and the same destinations
+        keep ranking highest, so without this the queue fills with duplicates —
+        one run produced 18 recommendations covering 5 destinations. An analyst
+        would then approve the same block four times.
+
+        Checks every status, not just pending: a destination that was already
+        approved and enforced must not come back either.
+        """
+        seen = {r.lstrip(".") for r in self.rules()}
+        try:
+            with urllib.request.urlopen(f"{INGESTION}/v1/recommendations", timeout=20) as r:
+                for rec in json.load(r).get("recommendations", []):
+                    target = rec.get("target") or rec.get("destination")
+                    if target:
+                        seen.add(str(target).lstrip("."))
+        except (OSError, ValueError):
+            pass
+        return seen
+
     def sync_squid(self) -> None:
         subprocess.run([SYNC], capture_output=True, timeout=60, check=False)  # noqa: S603
 
@@ -225,7 +247,12 @@ class Runner:
                     "event_ids": [],
                 },
             )
-            row["bytes_up"] += int(e.get("req_bytes") or 0)
+            # Both spellings: the collector posts squid's raw `req_bytes`,
+            # while canonical events (contracts/event.schema.json) carry
+            # `request_bytes`. Reading only one made every canonical event
+            # look like a 0-byte transfer, so the model saw nothing worth
+            # blocking and declined.
+            row["bytes_up"] += int(e.get("req_bytes") or e.get("request_bytes") or 0)
             if len(row["event_ids"]) < 20 and e.get("event_id"):
                 row["event_ids"].append(e["event_id"])
             row["requests"] += 1
@@ -260,7 +287,11 @@ class Runner:
         filed: list[dict[str, Any]] = []
         blockable = [d for d in decisions if d.block and d.severity in ("critical", "high")]
         async with Client("http://127.0.0.1:8100/mcp/") as client:
+            handled = self.already_proposed()
             for d in blockable:
+                if d.destination.lstrip(".") in handled:
+                    self.say(f"    already proposed, skipping: {d.destination}")
+                    continue
                 if not evidence.get(d.destination):
                     self.say(f"    skipping {d.destination}: no evidence event ids captured")
                     continue

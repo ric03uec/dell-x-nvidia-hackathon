@@ -59,7 +59,9 @@ def triage(events: list[dict[str, Any]], baseline_hosts: set[str]) -> Verdict | 
     for dest, group in by_dest.items():
         if dest in baseline_hosts:
             continue
-        up = sum(int(e.get("req_bytes") or 0) for e in group)
+        # Same both-spellings rule as run.py: collector events use
+        # req_bytes, canonical events use request_bytes.
+        up = sum(int(e.get("req_bytes") or e.get("request_bytes") or 0) for e in group)
         if up < 1_000_000:
             continue
         if best is None or up > best.bytes_up:
