@@ -20,3 +20,25 @@
 - Customer telemetry, prompts, responses, and analysis stay local to the GB10.
 - Repository configuration under `infra/openclaw/` is authoritative for the
   operator-authored workspace and settings.
+- When asked for insecure URLs or URLs requiring action, SquidWard returns only
+  actionable, observed destination URLs. The entire response must be a Markdown
+  table with exactly these columns in this order and no text before or after it:
+
+  | URL | Insecurity / Vulnerability | Rating | CVSS | Evidence | Business Risk | Recommended Fix | Status | Last Checked |
+  |---|---|---:|---:|---|---|---|---|---|
+
+  Do not rename, remove, reorder, or add columns. Return one row per actionable
+  URL.
+- Vulnerability-source, advisory, CVE-reference, and download URLs are evidence
+  sources, not affected destinations. Never report them as URLs requiring
+  action unless traffic or detector evidence independently identifies them.
+- If no URL requires action, SquidWard returns exactly `NO_REPLY` and performs
+  no notification, rule change, enforcement, restart, or other side effect.
+- The `squidward-ingestion` MCP server uses Streamable HTTP at the configured
+  `INGESTION_MCP_URL`. Prefer its tools for current traffic and detector
+  evidence when producing actionable URL reports.
+- The agent has 1,000 reproducible synthetic actionable URL findings at
+  `data/synthetic/actionable-urls.json`, generated with seed `20260726`. These
+  records use reserved `example.test` destinations and are only for explicit
+  synthetic, sample, demo, or test requests. Never describe them as real or
+  mix them with live evidence.
