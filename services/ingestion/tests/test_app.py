@@ -439,7 +439,11 @@ def test_mcp_endpoint_is_mounted_with_lifespan(client: TestClient) -> None:
 
 
 class PersistingOpenClaw:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
     def investigate(self, finding_id: str) -> None:
+        self.calls.append(finding_id)
         store.put_investigation(
             conn,
             finding_id,
@@ -449,15 +453,58 @@ class PersistingOpenClaw:
         )
 
 
-def test_openclaw_investigation_is_persisted(client: TestClient) -> None:
-    finding = {
+def finding_payload(severity: str = "critical") -> dict[str, Any]:
+    return {
         "schema_version": "1.0",
         "finding_id": "finding-001",
         "event_ids": ["evt-001"],
         "risk_score": 92,
-        "severity": "critical",
+        "severity": severity,
         "summary": "Correlated transfer.",
     }
+
+
+def test_high_risk_finding_starts_openclaw_investigation_automatically(
+    client: TestClient,
+) -> None:
+    openclaw = PersistingOpenClaw()
+    app.state.openclaw = openclaw
+
+    response = client.post("/v1/findings", json=finding_payload())
+
+    assert response.status_code == 201
+    assert response.json()["investigation_status"] == "running"
+    assert openclaw.calls == ["finding-001"]
+    investigation = store.get_investigation(conn, "finding-001")
+    assert investigation is not None
+    assert investigation["status"] == "completed"
+
+
+def test_completed_finding_is_not_investigated_twice(client: TestClient) -> None:
+    openclaw = PersistingOpenClaw()
+    app.state.openclaw = openclaw
+
+    client.post("/v1/findings", json=finding_payload())
+    response = client.post("/v1/findings", json=finding_payload())
+
+    assert response.json()["investigation_status"] == "completed"
+    assert openclaw.calls == ["finding-001"]
+
+
+def test_lower_severity_finding_does_not_start_inference(client: TestClient) -> None:
+    openclaw = PersistingOpenClaw()
+    app.state.openclaw = openclaw
+
+    response = client.post("/v1/findings", json=finding_payload("medium"))
+
+    assert response.status_code == 201
+    assert response.json()["investigation_status"] is None
+    assert openclaw.calls == []
+    assert store.get_investigation(conn, "finding-001") is None
+
+
+def test_openclaw_investigation_is_persisted(client: TestClient) -> None:
+    finding = finding_payload()
     client.post(
         "/v1/events",
         json={

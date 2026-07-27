@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field, StringConstraints
@@ -309,9 +309,28 @@ def delete_demo_data() -> dict[str, Any]:
 
 
 @app.post("/v1/findings", status_code=201)
-def post_finding(finding: FindingIn) -> dict[str, Any]:
+def post_finding(
+    finding: FindingIn, request: Request, background_tasks: BackgroundTasks
+) -> dict[str, Any]:
     finding_id = store.put_finding(conn, finding.model_dump(exclude_none=True))
-    return envelope(finding_id=finding_id, accepted=True)
+    investigation_status = None
+    client: OpenClawClient | None = request.app.state.openclaw
+    current = store.get_investigation(conn, finding_id)
+    if (
+        finding.severity in {"high", "critical"}
+        and client is not None
+        and (current is None or current["status"] == "failed")
+    ):
+        store.put_investigation(conn, finding_id, "running")
+        background_tasks.add_task(_run_investigation, finding_id, client)
+        investigation_status = "running"
+    elif current is not None:
+        investigation_status = current["status"]
+    return envelope(
+        finding_id=finding_id,
+        accepted=True,
+        investigation_status=investigation_status,
+    )
 
 
 @app.get("/v1/findings")
@@ -345,7 +364,7 @@ def investigate(
     if store.get_finding(conn, finding_id) is None:
         raise HTTPException(404, "no such finding")
     current = store.get_investigation(conn, finding_id)
-    if current and current["status"] == "completed":
+    if current and current["status"] in {"running", "completed"}:
         return envelope(investigation=current)
     client: OpenClawClient | None = request.app.state.openclaw
     if client is None:
@@ -360,33 +379,16 @@ def investigate(
             ),
         )
     store.put_investigation(conn, finding_id, "running")
-    try:
-        client.investigate(finding_id)
-    except OpenClawError as error:
-        failed = store.put_investigation(conn, finding_id, "failed", error=str(error))
+    result, error_code = _run_investigation(finding_id, client)
+    if error_code:
         return JSONResponse(
             status_code=502,
             content=envelope(
-                error={"code": "openclaw_failed", "message": str(error)},
-                investigation=failed,
+                error={"code": error_code, "message": result["error"]},
+                investigation=result,
             ),
         )
-    completed = store.get_investigation(conn, finding_id)
-    if completed is None or completed["status"] != "completed":
-        failed = store.put_investigation(
-            conn, finding_id, "failed", error="OpenClaw did not persist an investigation"
-        )
-        return JSONResponse(
-            status_code=502,
-            content=envelope(
-                error={
-                    "code": "investigation_not_persisted",
-                    "message": "OpenClaw did not persist an investigation",
-                },
-                investigation=failed,
-            ),
-        )
-    return envelope(investigation=completed)
+    return envelope(investigation=result)
 
 
 @app.post("/v1/recommendations", status_code=201)
@@ -571,6 +573,25 @@ def get_rules_txt() -> Response:
 @app.get("/v1/rules/check")
 def check_rule(dst: str) -> dict[str, Any]:
     return envelope(destination=dst, denied=store.is_denied(conn, dst))
+
+
+def _run_investigation(
+    finding_id: str, client: OpenClawClient
+) -> tuple[dict[str, Any], str | None]:
+    try:
+        client.investigate(finding_id)
+    except OpenClawError as error:
+        failed = store.put_investigation(conn, finding_id, "failed", error=str(error))
+        assert failed is not None
+        return failed, "openclaw_failed"
+
+    completed = store.get_investigation(conn, finding_id)
+    if completed is None or completed["status"] != "completed":
+        message = "OpenClaw did not persist an investigation"
+        failed = store.put_investigation(conn, finding_id, "failed", error=message)
+        assert failed is not None
+        return failed, "investigation_not_persisted"
+    return completed, None
 
 
 def _require_version(payload: dict[str, Any], optional: bool = False) -> None:
