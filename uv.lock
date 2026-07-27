@@ -2299,8 +2299,10 @@ name = "squidward-processing"
 version = "0.1.0"
 source = { editable = "services/processing" }
 dependencies = [
+    { name = "fastapi" },
     { name = "numpy" },
     { name = "scikit-learn" },
+    { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
@@ -2317,9 +2319,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "fastapi", specifier = ">=0.115" },
     { name = "numpy", specifier = ">=2.0,<2.3" },
     { name = "scikit-learn", specifier = ">=1.5,<1.8" },
     { name = "torch", marker = "extra == 'offline'", specifier = ">=2.5" },
+    { name = "uvicorn", specifier = ">=0.30" },
 ]
 provides-extras = ["offline"]
 

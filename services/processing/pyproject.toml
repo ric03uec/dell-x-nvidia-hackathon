@@ -6,6 +6,11 @@ requires-python = ">=3.11"
 dependencies = [
     "numpy>=2.0,<2.3",
     "scikit-learn>=1.5,<1.8",
+    # app.py serves FastAPI and Dockerfile.processing's CMD runs uvicorn, so
+    # both are runtime deps, not dev ones. Without them the built image starts
+    # and immediately dies with "No module named uvicorn".
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
 ]
 
 [project.optional-dependencies]
