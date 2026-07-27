@@ -1,6 +1,8 @@
 # SquidWard Hackathon Deck
 
-Open [`index.html`](./index.html) in a browser. It has no package or network dependencies.
+View the published deck at **[ric03uec.github.io/dell-x-nvidia-hackathon](https://ric03uec.github.io/dell-x-nvidia-hackathon/)**.
+
+For local use, open [`index.html`](./index.html) in a browser. It has no package or network dependencies. Changes under `deck/` on `main` are automatically deployed to GitHub Pages.
 
 ## Controls
 
