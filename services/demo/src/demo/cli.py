@@ -22,7 +22,7 @@ import sys
 import time
 import urllib.request
 
-from . import agent, anomalies, run, traffic
+from . import agent, anomalies, continuous, run, traffic
 from .catalog import ALL, ROUTINE
 
 INGESTION = "http://127.0.0.1:8100"
@@ -162,6 +162,16 @@ def cmd_run(args: argparse.Namespace) -> int:
     )
 
 
+def cmd_continuous(args: argparse.Namespace) -> int:
+    runner = run.Runner(args.log, attack_mb=args.attack_mb)
+    try:
+        return continuous.run(runner, args.minutes, args.cycle, not args.no_register)
+    except KeyboardInterrupt:
+        runner.stop.set()
+        runner.say("interrupted")
+        return 130
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -198,6 +208,21 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--log", default="/home/dell/ingestion-data/demo-run.log")
     r.add_argument("--no-auto-approve", action="store_true")
     r.set_defaults(func=cmd_run)
+
+    cont = sub.add_parser(
+        "continuous",
+        help="run traffic for N minutes, filing recommendations for OpenClaw to apply",
+    )
+    cont.add_argument("--minutes", type=float, default=5.0)
+    cont.add_argument(
+        "--cycle", type=float, default=45.0, help="seconds between investigation cycles"
+    )
+    cont.add_argument("--attack-mb", type=int, default=4)
+    cont.add_argument("--log", default="/home/dell/ingestion-data/demo-continuous.log")
+    cont.add_argument(
+        "--no-register", action="store_true", help="skip registering the MCP server with OpenClaw"
+    )
+    cont.set_defaults(func=cmd_continuous)
 
     args = parser.parse_args(argv)
     return int(args.func(args))
