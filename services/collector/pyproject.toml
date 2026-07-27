@@ -1,0 +1,27 @@
+[project]
+name = "collector"
+version = "0.1.0"
+description = "Tails Squid's exfilguard access.log and posts records to ingestion. Also the fixture generator, so one parser serves both."
+requires-python = ">=3.11"
+# No runtime dependencies on purpose: stdlib urllib and subprocess are enough,
+# and this is the one component that must keep running when everything else on
+# the box is being restarted.
+dependencies = []
+
+[project.scripts]
+collector = "collector.main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Lint/type/test config lives at the workspace root (../../pyproject.toml) so
+# every member shares one set of rules — do not redeclare [tool.ruff],
+# [tool.mypy] or [tool.pytest.ini_options] here.
