@@ -35,8 +35,14 @@ only that synthetic run while preserving real captures:
 just s ingestion run              # terminal 1; SQLite is durable
 just demo-seed                     # terminal 2; posts 26 events through the API
 just demo-clear                    # removes demo events/findings/actions only
-just demo-seed http://HOST:8100  # target another running appliance
+just demo-live                     # continuously add traffic and active findings
+just demo-seed http://HOST:8100    # target another running appliance
 ```
+
+`just demo-live` emits mostly normal traffic with a suspicious correlated burst
+every third cycle. Each burst is scored by the real deterministic processing
+pipeline and creates a pending `deny_destination` recommendation. It runs until
+Ctrl-C; pass an ingestion URL as the recipe argument to target another host.
 
 Demo cleanup identifies the synthetic `run-synthetic-001` marker and also
 removes findings, recommendations, decisions, enforcement results, and rules

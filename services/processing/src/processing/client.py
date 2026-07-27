@@ -30,6 +30,9 @@ class IngestionClient:
         except URLError as error:
             raise RuntimeError("ingestion request failed") from error
 
+    def post_event(self, event: Mapping[str, Any]) -> None:
+        self._post("/v1/events", event)
+
     def post_finding(self, finding: Mapping[str, Any]) -> None:
         self._post("/v1/findings", finding)
 

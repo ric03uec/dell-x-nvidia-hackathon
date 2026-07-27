@@ -31,3 +31,7 @@ demo model="artifacts/registry/isolation-forest-001.pkl":
     uv run squidward-process detect \
       --events ../../fixtures/expected/suspicious.json \
       --baseline ../../fixtures/expected/normal.json --model {{ model }}
+
+[group('processing')]
+demo-live ingestion_url="http://127.0.0.1:8100":
+    uv run squidward-process demo-live --ingestion-url {{ ingestion_url }}

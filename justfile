@@ -61,6 +61,11 @@ demo-seed api_url="http://127.0.0.1:8100":
 demo-clear api_url="http://127.0.0.1:8100":
     ./scripts/manage-demo-data.sh clear {{ api_url }}
 
+# Continuously generate realistic synthetic traffic and periodic active findings
+[group('demo')]
+demo-live api_url="http://127.0.0.1:8100":
+    @just s processing demo-live {{ api_url }}
+
 # Install the dashboard's pinned dependencies
 [group('dashboard')]
 dashboard-setup:
