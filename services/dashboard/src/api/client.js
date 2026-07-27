@@ -194,6 +194,15 @@ export function submitRecommendationDecision(id, decision, options) {
   });
 }
 
+export function addRecommendationNote(id, note, options) {
+  const { analyst = "local-analyst", ...requestOptions } = options ?? {};
+  return request(`/recommendations/${encodeURIComponent(id)}/notes`, {
+    ...requestOptions,
+    method: "POST",
+    body: { schema_version: SCHEMA_VERSION, analyst, note },
+  });
+}
+
 export function getEnforcementResults(findingId, options) {
   return request(`/enforcement-results${queryString({ finding_id: findingId })}`, options);
 }

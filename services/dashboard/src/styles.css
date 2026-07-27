@@ -684,6 +684,53 @@ ol { padding: 0; list-style: none; }
   text-align: center;
 }
 
+.review-table tbody tr.review-row td { height: 40px; }
+.review-table tbody tr.review-row.open { background: var(--panel-hover); }
+.review-table tbody tr.review-row.open td { border-bottom: 0; }
+.review-table tbody tr.review-detail:hover { background: transparent; }
+
+.review-detail > td {
+  height: auto;
+  padding: 12px 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-hover);
+}
+
+.review-facts { display: flex; gap: 24px; margin: 0 0 12px; flex-wrap: wrap; }
+.review-facts dt { color: var(--text-dim); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
+.review-facts dd { margin: 2px 0 0; color: var(--text-mid); font-size: 11.5px; }
+.review-facts div:last-child { flex: 1 1 260px; }
+
+.note-thread { margin: 0 0 12px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.note-thread li { padding-left: 9px; border-left: 2px solid var(--line); }
+.note-thread .note-empty { padding-left: 0; border-left: 0; color: var(--text-dim); font-size: 11.5px; }
+.note-body { margin: 0; color: var(--text); font-size: 11.5px; line-height: 1.45; white-space: pre-wrap; }
+.note-meta { margin: 3px 0 0; display: flex; gap: 8px; color: var(--text-dim); font-size: 10.5px; }
+.note-meta b { color: var(--text-mid); font-weight: 500; }
+
+.note-form { display: flex; flex-direction: column; gap: 8px; }
+
+.note-form textarea {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.note-form textarea:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.note-actions { display: flex; align-items: center; gap: 8px; }
+.note-spacer { flex: 1; }
+.note-decided { color: var(--text-dim); font-size: 11px; }
+.note-actions .ghost-button:disabled { cursor: not-allowed; opacity: .5; }
+.ghost-button.approve:hover { border-color: var(--green); color: var(--green); }
+.ghost-button.reject:hover { border-color: var(--red); color: var(--red); }
+
 .cell-lead { display: block; font-size: 12px; line-height: 1.25; }
 .cell-sub { display: block; overflow: hidden; color: var(--text-dim); font-size: 10.5px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 

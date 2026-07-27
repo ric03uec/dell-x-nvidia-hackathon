@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  addRecommendationNote,
   getEnforcementResults,
   getFinding,
   getRecommendations,
@@ -325,7 +326,12 @@ function App() {
               pendingAction={cvePolicyPending}
             />
           ) : activePage === "feedback" ? (
-            <DataPage data={feedbackPage} error={live.error} needle={needle} notify={notify} />
+            <ReviewQueue
+              data={feedbackPage}
+              needle={needle}
+              notify={notify}
+              onRefresh={live.refresh}
+            />
           ) : DEMO_PAGES_ENABLED && demoPageData[activePage] ? (
             <DataPage data={demoPageData[activePage]} needle={needle} notify={notify} />
           ) : null}
@@ -819,6 +825,181 @@ function DataPage({ data, error, notify, needle, onAction, pendingAction }) {
           </tbody>
         </table>
       </Panel>
+    </>
+  );
+}
+
+const REVIEW_COLUMNS = [
+  { key: "target", label: "Recommendation", width: "2.2fr" },
+  { key: "scope", label: "Scope", width: ".7fr" },
+  { key: "analyst", label: "Analyst", width: ".7fr" },
+  { key: "at", label: "Reviewed", width: ".7fr", align: "right" },
+  { key: "notes", label: "Notes", width: ".4fr", align: "right" },
+  { key: "verdict", label: "Verdict", width: ".7fr" },
+];
+
+function ReviewQueue({ data, needle, notify, onRefresh }) {
+  const [openId, setOpenId] = useState(null);
+  const [pendingId, setPendingId] = useState(null);
+  const visible = data.recommendations.filter((item) => matches(item, needle));
+  const total = REVIEW_COLUMNS.reduce((sum, item) => sum + parseFloat(item.width), 0);
+
+  async function run(id, work, message) {
+    if (pendingId) return;
+    setPendingId(id);
+    try {
+      await work();
+      onRefresh();
+      notify(message);
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  return (
+    <>
+      <MetricStrip metrics={data.metrics} />
+      <Panel
+        action={<CountBadge shown={visible.length} total={data.recommendations.length} />}
+        className="table-panel"
+        meta={data.meta}
+        title={data.title}
+      >
+        <table className="grid-table review-table">
+          <colgroup>
+            {REVIEW_COLUMNS.map((column) => (
+              <col key={column.key} style={{ width: `${(parseFloat(column.width) / total) * 100}%` }} />
+            ))}
+          </colgroup>
+          <thead>
+            <tr>
+              {REVIEW_COLUMNS.map((column) => (
+                <th className={column.align === "right" ? "num" : ""} key={column.key}>{column.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {visible.length === 0 && <EmptyRow span={REVIEW_COLUMNS.length} />}
+            {visible.map((item) => (
+              <ReviewRow
+                item={item}
+                key={item.id}
+                onDecide={(decision) => run(
+                  item.id,
+                  () => submitRecommendationDecision(item.id, decision),
+                  `${item.target} ${decision}`,
+                )}
+                onNote={(note) => run(
+                  item.id,
+                  () => addRecommendationNote(item.id, note),
+                  `Note added to ${item.target}`,
+                )}
+                onToggle={() => setOpenId((current) => (current === item.id ? null : item.id))}
+                open={openId === item.id}
+                pending={pendingId === item.id}
+              />
+            ))}
+          </tbody>
+        </table>
+      </Panel>
+    </>
+  );
+}
+
+function ReviewRow({ item, open, pending, onToggle, onNote, onDecide }) {
+  const [draft, setDraft] = useState("");
+  const note = draft.trim();
+
+  function submitNote(event) {
+    event.preventDefault();
+    if (!note || pending) return;
+    onNote(note);
+    setDraft("");
+  }
+
+  return (
+    <>
+      <tr
+        aria-expanded={open}
+        className={open ? "review-row open" : "review-row"}
+        onClick={onToggle}
+        onKeyDown={activateOnKey(onToggle)}
+        tabIndex={0}
+      >
+        <td>
+          <span className="cell-lead">{item.target}</span>
+          <span className="cell-sub">{item.reason}</span>
+        </td>
+        <td>{item.scope}</td>
+        <td>{item.analyst}</td>
+        <td className="num mono">{item.reviewedAt}</td>
+        <td className="num mono">{item.notes.length}</td>
+        <td><span className={`badge ${item.level}`}><i />{item.status}</span></td>
+      </tr>
+      {open && (
+        <tr className="review-detail">
+          <td colSpan={REVIEW_COLUMNS.length}>
+            <dl className="review-facts">
+              <div><dt>Finding</dt><dd className="mono">{item.findingId ?? "Unavailable"}</dd></div>
+              <div><dt>Expires</dt><dd className="mono">{item.expiresAt}</dd></div>
+              <div><dt>Reason</dt><dd>{item.reason}</dd></div>
+            </dl>
+
+            <ol className="note-thread">
+              {item.notes.length === 0 && <li className="note-empty">No analyst notes yet</li>}
+              {item.notes.map((entry) => (
+                <li key={entry.id}>
+                  <p className="note-body">{entry.note}</p>
+                  <p className="note-meta"><b>{entry.analyst}</b><span>{entry.at}</span></p>
+                </li>
+              ))}
+            </ol>
+
+            <form className="note-form" onSubmit={submitNote}>
+              <textarea
+                aria-label={`Note on ${item.target}`}
+                maxLength={2000}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder="Why should this be enforced, or why is it a false positive?"
+                rows={2}
+                value={draft}
+              />
+              <div className="note-actions">
+                <button className="ghost-button" disabled={pending || !note} type="submit">
+                  {pending ? "Saving…" : "Add note"}
+                </button>
+                <span className="note-spacer" />
+                {item.decided ? (
+                  <span className="note-decided">
+                    {item.status} by {item.analyst} at {item.reviewedAt}
+                  </span>
+                ) : (
+                  <>
+                    <button
+                      className="ghost-button approve"
+                      disabled={pending}
+                      onClick={() => onDecide("approved")}
+                      type="button"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      className="ghost-button reject"
+                      disabled={pending}
+                      onClick={() => onDecide("rejected")}
+                      type="button"
+                    >
+                      Reject
+                    </button>
+                  </>
+                )}
+              </div>
+            </form>
+          </td>
+        </tr>
+      )}
     </>
   );
 }

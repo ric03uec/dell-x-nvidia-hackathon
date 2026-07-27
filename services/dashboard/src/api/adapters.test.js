@@ -79,6 +79,14 @@ test("adapts analyst decisions without inventing review timings", () => {
         scope: "business-agent",
         status: "approved",
         decision: { analyst: "J. Ortiz", timestamp: "2026-07-26T14:02:00Z" },
+        notes: [
+          {
+            note_id: 1,
+            analyst: "soc-tier1",
+            note: "Confirmed with the platform team.",
+            timestamp: "2026-07-26T14:01:00Z",
+          },
+        ],
       },
       {
         recommendation_id: "rec-002",
@@ -92,19 +100,28 @@ test("adapts analyst decisions without inventing review timings", () => {
 
   assert.equal(page.meta, "1 of 2 recommendations reviewed");
   assert.deepEqual(page.metrics.map((metric) => metric[1]), ["1", "1", "0", "50%"]);
-  assert.deepEqual(page.rows[0][0], ["unknown-storage.example", "Evidence exceeded threshold."]);
-  assert.equal(page.rows[0][1], "J. Ortiz");
-  assert.equal(page.rows[0][2], "14:02:00");
-  assert.equal(page.rows[0][4].level, "ok");
+
+  const [approved, pending] = page.recommendations;
+  assert.equal(approved.target, "unknown-storage.example");
+  assert.equal(approved.analyst, "J. Ortiz");
+  assert.equal(approved.reviewedAt, "14:02:00");
+  assert.equal(approved.level, "ok");
+  assert.equal(approved.decided, true);
+  assert.deepEqual(approved.notes.map((note) => note.analyst), ["soc-tier1"]);
+  assert.equal(approved.notes[0].at, "14:01:00");
+
   // A recommendation nobody has reviewed must not borrow another analyst's name.
-  assert.equal(page.rows[1][1], "Unavailable");
-  assert.equal(page.rows[1][2], "Unavailable");
-  assert.equal(page.rows[1][4].badge, "pending");
+  assert.equal(pending.analyst, "Unavailable");
+  assert.equal(pending.reviewedAt, "Unavailable");
+  assert.equal(pending.decided, false);
+  assert.equal(pending.status, "pending");
+  // No note thread must read as empty, not as a missing value.
+  assert.deepEqual(pending.notes, []);
 });
 
 test("shows an empty review queue rather than fabricating rows", () => {
   const page = toFeedbackPage(null);
 
   assert.equal(page.meta, "Waiting for API");
-  assert.deepEqual(page.rows, []);
+  assert.deepEqual(page.recommendations, []);
 });

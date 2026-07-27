@@ -132,20 +132,26 @@ export function toFeedbackPage(catalog) {
     meta: catalog
       ? `${reviewed} of ${recommendations.length} recommendations reviewed`
       : "Waiting for API",
-    columns: [
-      { key: "target", label: "Recommendation", width: "1.3fr" },
-      { key: "analyst", label: "Analyst", width: ".7fr" },
-      { key: "at", label: "Reviewed", width: ".5fr", align: "right" },
-      { key: "scope", label: "Scope", width: ".6fr" },
-      { key: "verdict", label: "Verdict", width: ".7fr" },
-    ],
-    rows: recommendations.map((item) => [
-      [present(item.target), present(item.reason)],
-      present(item.decision?.analyst),
-      formatTimestamp(item.decision?.timestamp),
-      present(item.scope),
-      { badge: present(item.status), level: VERDICT_LEVELS[item.status] ?? "muted" },
-    ]),
+    recommendations: recommendations.map((item) => ({
+      id: item.recommendation_id,
+      findingId: item.finding_id ?? null,
+      target: present(item.target),
+      reason: present(item.reason),
+      scope: present(item.scope),
+      status: present(item.status),
+      level: VERDICT_LEVELS[item.status] ?? "muted",
+      analyst: present(item.decision?.analyst),
+      reviewedAt: formatTimestamp(item.decision?.timestamp),
+      decided: Boolean(item.decision),
+      // Expiry is usually weeks out, so a bare time of day would read as today.
+      expiresAt: formatTimestamp(item.expires_at, { includeDate: true }),
+      notes: (Array.isArray(item.notes) ? item.notes : []).map((note) => ({
+        id: note.note_id,
+        analyst: present(note.analyst),
+        note: present(note.note),
+        at: formatTimestamp(note.timestamp),
+      })),
+    })),
   };
 }
 

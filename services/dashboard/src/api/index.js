@@ -1,5 +1,6 @@
 export {
   ApiError,
+  addRecommendationNote,
   getEnforcementResults,
   getEvents,
   getFinding,
