@@ -101,7 +101,7 @@ def test_lines_from_the_source_reach_ingestion(tmp_path: Path, stub_ingestion: s
     log.write_text(CONNECT + "\n" + WITH_CREDENTIAL + "\n")
 
     # `cat` stands in for the docker exec tail: same contract, no docker.
-    assert run(f"cat {log}", stub_ingestion) == 0
+    assert run(f"cat {log}", stub_ingestion, retry=False) == 0
 
     assert len(_Capture.received) == 2
     assert _Capture.received[0]["uri"] == "httpbin.org:443"
@@ -111,7 +111,7 @@ def test_no_credential_reaches_ingestion(tmp_path: Path, stub_ingestion: str) ->
     log = tmp_path / "access.log"
     log.write_text(WITH_CREDENTIAL + "\n")
 
-    run(f"cat {log}", stub_ingestion)
+    run(f"cat {log}", stub_ingestion, retry=False)
 
     assert "SECRET123" not in json.dumps(_Capture.received)
 
@@ -123,4 +123,4 @@ def test_a_dead_ingestion_drops_loudly_instead_of_crashing(tmp_path: Path) -> No
     log.write_text(CONNECT + "\n")
 
     # Port 1 is reserved and nothing listens there.
-    assert run(f"cat {log}", "http://127.0.0.1:1") == 1
+    assert run(f"cat {log}", "http://127.0.0.1:1", retry=False) == 1
