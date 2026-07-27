@@ -47,6 +47,10 @@ services:
           - auth.okta-sandbox.test
           - status.uptime-probe.test
           - backup-sync.dropfiles-cdn.test
+          - sync-node-2.dropfiles-cdn.test
+          - vault-mirror.dropfiles-cdn.test
+          - offsite-3.dropfiles-cdn.test
+          - archive-relay.dropfiles-cdn.test
 
 volumes:
   # A named volume, not a bind mount: squid writes as uid 13 (proxy) and a host

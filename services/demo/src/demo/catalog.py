@@ -28,9 +28,22 @@ ROUTINE = [
 
 # Never seen before the incident. This is what the story turns on: not the size
 # of one upload, but a large transfer to a destination with no history.
-EXFIL = "backup-sync.dropfiles-cdn.test"
+#
+# A POOL, not one host, so the demo is re-runnable. Once an analyst approves a
+# block, Squid enforces it permanently — a second take against the same host
+# would be refused before the incident could happen, and the recording would
+# show nothing. Each run picks a destination that is not yet denied, which
+# needs no reset endpoint and no database surgery between takes.
+EXFIL_POOL = [
+    "backup-sync.dropfiles-cdn.test",
+    "sync-node-2.dropfiles-cdn.test",
+    "vault-mirror.dropfiles-cdn.test",
+    "offsite-3.dropfiles-cdn.test",
+    "archive-relay.dropfiles-cdn.test",
+]
+EXFIL = EXFIL_POOL[0]
 
-ALL = [*ROUTINE, EXFIL]
+ALL = [*ROUTINE, *EXFIL_POOL]
 
 # Staging actions that precede the transfer. The point of the demo is
 # CORRELATION — a single big POST is catchable by a one-line rule and proves
