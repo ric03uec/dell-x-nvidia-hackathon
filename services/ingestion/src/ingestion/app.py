@@ -169,6 +169,12 @@ def get_events(
     return envelope(count=len(events), events=events)
 
 
+@app.delete("/v1/demo-data")
+def delete_demo_data() -> dict[str, Any]:
+    """Remove synthetic demo records without touching captured production data."""
+    return envelope(removed=store.clear_demo_data(conn))
+
+
 @app.post("/v1/findings", status_code=201)
 def post_finding(finding: FindingIn) -> dict[str, Any]:
     finding_id = store.put_finding(conn, finding.model_dump(exclude_none=True))

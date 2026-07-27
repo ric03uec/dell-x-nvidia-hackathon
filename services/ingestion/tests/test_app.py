@@ -103,7 +103,10 @@ def test_canonical_pipeline_is_persisted_and_returned_in_contract_shape(
         "action": "http_post",
         "destination": "receiver.demo.local",
         "request_bytes": 25_000_000,
-        "attributes": {"body_stored": False},
+        "attributes": {
+            "body_stored": False,
+            "openshell_run_id": "run-synthetic-001",
+        },
     }
     finding = {
         "schema_version": "1.0",
@@ -152,6 +155,23 @@ def test_canonical_pipeline_is_persisted_and_returned_in_contract_shape(
     snapshot = client.post("/v1/snapshots")
     assert snapshot.status_code == 201
     assert client.get(f"/v1/snapshots/{snapshot.json()['snapshot_id']}").status_code == 200
+
+    unrelated = {**event, "event_id": "evt-real-001", "attributes": {"body_stored": False}}
+    assert client.post("/v1/events", json=unrelated).status_code == 201
+    cleared = client.delete("/v1/demo-data")
+    assert cleared.status_code == 200
+    assert cleared.json()["removed"] == {
+        "events": 1,
+        "findings": 1,
+        "recommendations": 1,
+        "decisions": 1,
+        "enforcement_results": 1,
+        "labels": 0,
+        "rules": 1,
+    }
+    remaining = client.get("/v1/events").json()["events"]
+    assert [item["event_id"] for item in remaining] == ["evt-real-001"]
+    assert client.get("/v1/recommendations").json()["count"] == 0
 
 
 # --- the path that actually enforces ------------------------------------

@@ -51,6 +51,16 @@ dashboard-demo:
 demo-pipeline:
     ./scripts/demo-pipeline.sh
 
+# Seed the database behind a running ingestion API with 26 synthetic events
+[group('demo')]
+demo-seed api_url="http://127.0.0.1:8100":
+    ./scripts/manage-demo-data.sh seed {{ api_url }}
+
+# Remove only synthetic demo events and records derived from them
+[group('demo')]
+demo-clear api_url="http://127.0.0.1:8100":
+    ./scripts/manage-demo-data.sh clear {{ api_url }}
+
 # Install the dashboard's pinned dependencies
 [group('dashboard')]
 dashboard-setup:
